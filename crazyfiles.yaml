@@ -1,0 +1,21 @@
+files:
+- Id: 1
+  Pose: 0.0
+  Position:
+  - 0.7049
+  - -0.0467293
+- Id: 2
+  Pose: 0.0
+  Position:
+  - 0.48
+  - -0.36
+- Id: 3
+  Pose: 0.0
+  Position:
+  - 0.135564
+  - 0.0283081
+- Id: 4
+  Pose: 0.0
+  Position:
+  - 0.124856
+  - -0.546081
