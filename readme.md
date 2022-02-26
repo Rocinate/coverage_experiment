@@ -13,10 +13,10 @@
 
 ### 实验main函数
 
-| file                                     | part     |
-| ---------------------------------------- | -------- |
-| [online_map_sim.py](./online_map_sim.py) | 演示程序 |
-|                                          |          |
-|                                          |          |
-|                                          |          |
+| file                                                 | part                                     |
+| ---------------------------------------------------- | ---------------------------------------- |
+| [online_map_sim.py](./online_map_sim.py)             | 演示程序，需要web界面配合                |
+| [online_casadi_pose.py](./online_casadi_pose.py)     | 单线程覆盖控制程序，--local用于本地debug |
+| [online_casadi_thread.py](./online_casadi_thread.py) | 多线程覆盖控制程序                       |
+|                                                      |                                          |
 

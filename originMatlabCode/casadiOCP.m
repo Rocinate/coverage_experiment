@@ -61,18 +61,18 @@ ubw = [];
 J = 0;
 g = {};
 lbg = [];
-ubg = []; 
+ubg = [];
 %% Formulate the NLP
 Zcx = Px(i)-(vv(i)/ww)*(sin(Pz(i)));  %转为虚拟位置
 Zcy = Py(i)+(vv(i)/ww)*(cos(Pz(i)));
 Zcz = Pz(i);
 Xk= [Zcx; Zcy; Zcz];  %初始状态
-voronoix = v(c{i},1);  %维诺边界x端点坐标，首尾重复 
-voronoiy = v(c{i},2);  %维诺边界y端点坐标， 
+voronoix = v(c{i},1);  %维诺边界x端点坐标，首尾重复
+voronoiy = v(c{i},2);  %维诺边界y端点坐标，
 zxc = size(voronoix,1)-1;  %约束条件个数
 zzxc = size(voronoix,1)+1;  %n之后增加1和2，便于循环
 duanx = zeros(zzxc,1);  %维诺顶点坐标
-duany = zeros(zzxc,1);  
+duany = zeros(zzxc,1);
 for iq = 1:zzxc-1
     duanx(iq) = voronoix(iq);
     duany(iq) = voronoiy(iq);
@@ -81,7 +81,7 @@ duanx(zzxc) = voronoix(2);
 duany(zzxc) = voronoiy(2);
 lowbound = zeros(zzxc-2,1);  %约束条件边界
 upbound = zeros(zzxc-2,1);
-for iqw = 1:(zzxc-2) %避撞约束判断   
+for iqw = 1:(zzxc-2) %避撞约束判断
      if ((duanx(iqw+2)-duanx(iqw))*(duany(iqw+1)-duany(iqw))-(duany(iqw+2)-duany(iqw))*(duanx(iqw+1)-duanx(iqw))) > 0
          upbound(iqw) = inf;
      else lowbound(iqw) = -inf;
@@ -107,10 +107,10 @@ for k = 0:N-1
         g = [g; {[abs((Xk(1)+(vv(i)/ww)*sin(Xk(3))-duanx(kZ))*(duany(kZ+1)-duany(kZ))-(Xk(2)-(vv(i)/ww)*cos(Xk(3))-duany(kZ))*(duanx(kZ+1)-duanx(kZ)))/sqrt((duany(kZ+1)-duany(kZ))^2+(duanx(kZ+1)-duanx(kZ))^2)]}];
     end
     lbg = [lbg; lowbound];
-    ubg = [ubg; upbound];      
+    ubg = [ubg; upbound];
     for kZ = 1:zxc
         lbg = [lbg; volume];
-        ubg = [ubg; inf]; 
+        ubg = [ubg; inf];
     end
 end
 %% Create an NLP solver

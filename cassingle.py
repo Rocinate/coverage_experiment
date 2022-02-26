@@ -29,7 +29,7 @@ class Cassingle:
             [round(x, 8), round(y, 8), self.intensity] for x in np.arange(-xRange, xRange, self.step) for y in np.arange(-yRange, yRange, self.step)
         ])
 
-    def update(self, vertices, centroid, virtual_vertices, virtual_centroid, Position, Pose):
+    def update(self, vertices, centroid, virtual_vertices, Position, Pose):
         # 声明符号变量
         x1 = MX.sym('x1')
         x2 = MX.sym('x2')
@@ -131,7 +131,7 @@ class Cassingle:
             # for i in range(verticesNum):
             #     g += [fabs(Xk[0] + (self.lineSpeed/self.angularSpeed)*sin(Xk[2]) - verticesX[i]) * (verticesY[i+1] - verticesY[i]) -
             #         (Xk[1] - (self.lineSpeed/self.angularSpeed)*cos(Xk[2]) - verticesY[i]) * (verticesX[i+1] - verticesX[i]) \
-            #         /sqrt((verticesY[i+1] - verticesY[i])**2 + (verticesX[i+1] - verticesX[i]))]
+            #         / sqrt((verticesY[i+1] - verticesY[i])**2 + (verticesX[i+1] - verticesX[i]))]
 
             lbg += lowBound
             ubg += upBound

@@ -92,7 +92,6 @@ if __name__ == "__main__":
                 flie['vertices'],
                 flie['centroid'],
                 virtualFlie['vertices'],
-                virtualFlie['centroid'],
                 allCrazyFlies[matchIndex]['Position'],
                 allCrazyFlies[matchIndex]['Pose']
             )
