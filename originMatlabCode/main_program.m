@@ -4,7 +4,7 @@ clear all;
 numIterations = 50;  %迭代次数
 xrange = 0.75;  yrange = 1;  %覆盖范围-xrange~xrange， -yrange~yrange
 crs = [ -xrange, -yrange; -xrange, yrange; xrange, yrange; xrange, -yrange];  %覆盖范围顶点坐标
-n = 4; %无人机数量  
+n = 4; %无人机数量
 Px = zeros(4,1)-0.3;  Py = [0.45; 0.15; -0.15; -0.5];  Pz = zeros(n,1);  %无人机初始状态(位置+角度)
 %Px = zeros(n,1)-0.3;  Py = [0.5; 0.4; 0.3; 0.2; 0.1];  Pz = zeros(n,1);  %无人机初始状态(位置+角度)
 Pq = zeros(n,1);  %上次迭代的最后控制率
@@ -17,12 +17,12 @@ volume = 0.05;  %机器人体积半径
 %% 作图设置
 verCellHandle = zeros(n,1);  %维诺划分作图句柄设置
 cellColors = cool(n); %维诺划分有颜色
-%cellColors = zeros(5,3)+1;  %维诺划分无颜色    
+%cellColors = zeros(5,3)+1;  %维诺划分无颜色
 for i = 1:n
     verCellHandle(i)  = patch(Px(i),Py(i),cellColors(i,:));
     hold on
 end
-pthHandle = zeros(n,1);  %轨迹作图句柄设置  
+pthHandle = zeros(n,1);  %轨迹作图句柄设置
  for i = 1:n
      pathHandle(i)  = plot(Px(i),Py(i),'-','color',cellColors(i,:)*.8,'linewidth',1.5);
  end
@@ -49,7 +49,7 @@ for counter = 1:numIterations
     for i = 1:n  %真实位置的voronoi划分作图
         %set(verCellHandle(i), 'XData',v2(c2{i},1),'YData',v2(c2{i},2));  %虚拟位置的voronoi划分作图
         set(verCellHandle(i), 'XData',v(c{i},1),'YData',v(c{i},2));  %真实位置的voronoi划分作图
-    end  
+    end
     for i = 1:n %计算无人机控制率和位置
         [cx,cy] = PolyCentroid(v(c{i},1),v(c{i},2)); %实际维诺划分计算质心
         [P1,P2,P3,P4] = casadiOCP(Px,Py,Pz,i,v,c,Pq(i),cx,cy,vv,ww,v2,c2,volume); %计算下一步控制率
@@ -57,14 +57,14 @@ for counter = 1:numIterations
         %Pqwe(counter,i) = P4;  %上次迭代的最后控制率全部储存
         zt = size(P1,1);
         for kt=1:zt
-            Ppz(i) = P3(kt);  %实际角度  
-            Pathz(zt*(counter-1)+kt,i) = Ppz(i);   
+            Ppz(i) = P3(kt);  %实际角度
+            Pathz(zt*(counter-1)+kt,i) = Ppz(i);
             Ppx(i) = P1(kt)+(vv(i)/ww)*(sin(P3(kt)));  %实际x轴位置
             Pathx(zt*(counter-1)+kt,i) = Ppx(i);  %位置储存
-            Ppy(i) = P2(kt)-(vv(i)/ww)*(cos(P3(kt)));   
+            Ppy(i) = P2(kt)-(vv(i)/ww)*(cos(P3(kt)));
             Pathy(zt*(counter-1)+kt,i) = Ppy(i);
             set(currHandle,'XData',Ppx(i),'YData',Ppy(i));  %画图无人机轨迹
-            %covpx(i,(counter-1)*zt+kt)=Ppx(i);  
+            %covpx(i,(counter-1)*zt+kt)=Ppx(i);
             %covpy(i,(counter-1)*zt+kt)=Ppy(i);  %%覆盖率计算
             xD = [get(pathHandle(i),'XData'),Ppx(i)];
             yD = [get(pathHandle(i),'YData'),Ppy(i)];
@@ -82,7 +82,7 @@ end
 % sj_point = rand(2000,2);
 % xs = 1.5*sj_point(:,1)-0.75;
 % y = 2*sj_point(:,2)-1;
-% for j = 1:size(covpx,2) 
+% for j = 1:size(covpx,2)
 %     m = 0;
 %     for i = 1:size(sj_point,1)
 %         dis = (covpx(:,j)-sj_point(i,1)*(zeros(n,1)+1)).^2+(covpy(:,j)-sj_point(i,2)*(zeros(n,1)+1)).^2;
@@ -99,10 +99,10 @@ end
 %% 损失函数计算
 figure(3)
 [jk,nm] = meshgrid(-xrange:2*xrange/10:xrange,-yrange:2*yrange/10:yrange);
-jk = jk(:);  nm = nm(:); 
+jk = jk(:);  nm = nm(:);
 for j = 1:size(Pathx,1)
     for k = 1:size(jk,1)
-        cost(k) = min(sqrt((zeros(n,1)+jk(k)-Pathx(j,:)').^2+(zeros(n,1)+nm(k)-Pathy(j,:)').^2));           
+        cost(k) = min(sqrt((zeros(n,1)+jk(k)-Pathx(j,:)').^2+(zeros(n,1)+nm(k)-Pathy(j,:)').^2));
     end
     costfunction(j) = sum(cost);
 end
@@ -114,7 +114,7 @@ for j = 1:size(Pathx,1)
         [vrea,crea] = VoronoiBounded(Pathx(j,:)',Pathy(j,:)',crs);  %真实位置的voronoi划分计算，第c个无人机维诺划分顶点坐标v
     end
     for k = 1:n
-        voronoix = vrea(crea{k},1);  %维诺边界x端点坐标，首尾重复 
+        voronoix = vrea(crea{k},1);  %维诺边界x端点坐标，首尾重复
         voronoiy = vrea(crea{k},2);  %维诺边界y端点坐标，
         for p = 1:(size(voronoix,1)-1)
             safedis=[];

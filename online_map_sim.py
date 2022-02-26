@@ -56,7 +56,7 @@ if __name__ == "__main__":
     allWaypoints = []
 
     for counter in range(numIterations):
-        print("epotch: {}, progress: {}%".format(
+        print("epoch: {}, progress: {}%".format(
             counter,
             round(float(counter)/numIterations * 100, 2)
         ))
@@ -70,8 +70,8 @@ if __name__ == "__main__":
             [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == flie['Id']]
             # casadi运算下一步位置
             outPut = cassingle.update(
-                flie['vertices'], 
-                flie['centroid'], 
+                flie['vertices'],
+                flie['centroid'],
                 allCrazyFlies[matchIndex]['Position'],
                 allCrazyFlies[matchIndex]['Pose']
             )

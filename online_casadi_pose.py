@@ -5,8 +5,10 @@ import os
 import yaml
 import numpy as np
 import time
-time.clock = time.time
 import math
+
+# if python3
+time.clock = time.time
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -37,17 +39,17 @@ with open("crazyfiles.yaml", "r") as f:
 allCrazyFlies = data['files']
 
 STOP = False
-numIterations = 50
-xRange = 1.
-yRange = 1.
+numIterations = 40
+xRange = 3.5
+yRange = 2.5
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.05
-angularSpeed = 0.5
+lineSpeed = 0.1
+angularSpeed = 0.2
 draw =  True# 是否画图
-T = 3.0
-N = 6
+T = 5.0
+N = 10
 allcfsTime = T/N
-actualSpeed = 0.05
+volume = 0.05
 Z = 1.0 # 高度
 
 if __name__ == "__main__":
@@ -56,19 +58,19 @@ if __name__ == "__main__":
 
     vor = Vor(box, lineSpeed, angularSpeed)
 
-    cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, method="objective")
+    cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, volume, method="objective")
 
     graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
 
     if not args.local:
-        cfController = CFController(allCrazyFlies, N, T, Z, actualSpeed)
+        cfController = CFController(allCrazyFlies, N, T, Z, lineSpeed)
 
     allWaypoints = []
 
     print("start calculating!")
 
     for counter in range(numIterations):
-        print("epotch: {}, progress: {}%".format(
+        print("epoch: {}, progress: {}%".format(
             counter,
             round(float(counter)/numIterations * 100, 2)
         ))
@@ -97,9 +99,9 @@ if __name__ == "__main__":
 
             allCrazyFlies[matchIndex]['Position'] = [pos for pos in outPut[-1][0:2]]
             allCrazyFlies[matchIndex]['Pose'] = round(outPut[-1][-1], 2)
-            
+
             draw and graph.updateTrack(
-                np.array(outPut), 
+                np.array(outPut),
                 allCrazyFlies[matchIndex]['Id']
             )
 
@@ -122,13 +124,14 @@ if __name__ == "__main__":
             np.array([cf['centroid'] for cf in vorResult]) # 真实位置维诺质心
             # np.array([cf['centroid'] for cf in virtualResult])
         )
-        
+
         # 使用虚拟位置更新维诺边界
         draw and graph.updateRidges(virtualResult)
         # draw and graph.updateRidges(vorResult)
-    
+
     if not args.local:
         print("casadi down, execute all waypoints")
+
         cfController.startFlies()
         for waypoints in allWaypoints:
             # 实时飞行

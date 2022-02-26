@@ -2,20 +2,25 @@ files:
 - Id: 1
   Pose: 0.0
   Position:
-  - -0.3
-  - 0.45
+  - -1.0
+  - -1.5
 - Id: 2
   Pose: 0.0
   Position:
-  - -0.3
-  - 0.15
+  - -0.5
+  - -1.5
 - Id: 3
   Pose: 0.0
   Position:
-  - -0.3
-  - -0.15
+  - 0.0
+  - -1.5
 - Id: 4
   Pose: 0.0
   Position:
-  - -0.3
-  - -0.5
+  - 0.5
+  - -1.5
+- Id: 5
+  Pose: 0.0
+  Position:
+  - 1.0
+  - -1.5

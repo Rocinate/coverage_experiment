@@ -53,7 +53,7 @@ def calcul(numIterations):
         graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
 
     for counter in range(numIterations):
-        print("epotch: {}, progress: {}%".format(
+        print("epoch: {}, progress: {}%".format(
             counter,
             round(float(counter)/numIterations * 100, 2)
         ))

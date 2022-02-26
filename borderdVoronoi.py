@@ -15,7 +15,7 @@ class Vor:
         self.box = box
         self.lineSpeed = lineSpeed
         self.angularSpeed = angularSpeed
-    
+
     # 判断点是否在场地范围内
     def __in_box(self, towers, bounding_box):
         return np.logical_and(np.logical_and(bounding_box[0] <= towers[:, 0],
@@ -118,9 +118,9 @@ class Vor:
                 'vertices': vertices,
                 'centroid': centroid
             })
-        
+
         return vorResult
-    
+
     def virtualVor(self, positionWithId):
         return self.updateVor(self.virtualPosition(positionWithId))
 
@@ -133,7 +133,7 @@ class Vor:
             pose = cf['Pose']
             virtualPosition = [
                 round(position[0] - (self.lineSpeed/self.angularSpeed) * (math.sin(pose)),2),
-                round(position[1] - (self.lineSpeed/self.angularSpeed) * (math.cos(pose)),2)
+                round(position[1] + (self.lineSpeed/self.angularSpeed) * (math.cos(pose)),2)
             ]
             cf['Position'] = virtualPosition
         return virtualList
