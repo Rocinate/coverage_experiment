@@ -3,12 +3,20 @@
 from pycrazyswarm import *
 import numpy as np
 import math
+import json
+from scipy.spatial.transform import Rotation
+
+def print2txt(txt):
+    with open("origin.txt", "w") as f:
+        f.write(txt)
+
 
 class CFController:
     def __init__(self, allCrazyFlies, N, T, Z, actualSpeed):
         self.executeNumber = 0
         self.actualSpeed = actualSpeed
         self.cfNum = len(allCrazyFlies)
+        self.logBuffer = []
         # height
         self.Z = Z
         self.framRate = float(N) / T
@@ -45,13 +53,38 @@ class CFController:
             # 获取对应ID的无人机控制器实例
             cf = allcfsDict[waypoint['Id']]
 
-            error = desiredPos - cf.position()
+            actualPosition = cf.position()
+            quaternion = cf.quaternion()
 
-            exec("yawRate = - round((waypoint['theta'] - self.lastYaw{}) / math.pi * 180 * self.framRate, 2)".format(waypoint['Id']))
+            rot = Rotation.from_quat(quaternion)
+            actualPose = rot.as_euler("xyz")
+            error = desiredPos - actualPosition
+
+            self.logBuffer.append({
+                "id": waypoint["Id"],
+                "position": actualPosition.tolist()
+            })
+
+            # yawError = (waypoint['theta'] - actualPose[2]) / math.pi * 180
+            # if (yawError >= 180):
+            #     yawError  = 360 - yawError
+            # elif(yawError <= -180):
+            #     yawError += -yawError - 360
+
+            # yawRate = - round(yawError, 2)
+
+            exec("yawError = (waypoint['theta'] - self.lastYaw{}) / math.pi * 180".format(waypoint['Id']))
+
+            if (yawError >= 180):
+                yawError  = 360 - yawError
+            elif(yawError <= -180):
+                yawError += -yawError - 360
+
+            exec("yawRate = (waypoint['theta'] - self.lastYaw{}) / math.pi * 180 * self.framRate".format(waypoint['Id']))
+
             exec("self.lastYaw{} = waypoint['theta']".format(waypoint['Id']))
-
-            # yawRate = (waypoint['theta'] - cf.yaw()) / math.pi * 180 * self.framRate
-            cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate = yawRate)
+            cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate = -yawError * self.framRate)
+            #cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate = 0)
 
             self.executeNumber += 1
             if(self.executeNumber == self.cfNum):
@@ -61,6 +94,8 @@ class CFController:
     # 降落
     def goLand(self):
         print('Land!')
+        print2txt(json.dumps(self.logBuffer))
+        print('saved data')
         allcfsDict = self.allcfs.crazyfliesById
         cfs = allcfsDict.values()
         i = 0

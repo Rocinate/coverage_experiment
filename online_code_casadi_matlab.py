@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-#!/usr/bin/env python
+#!/usr/bin/env pythonW
 import signal
 import numpy as np
 import scipy.spatial as sp
@@ -7,16 +7,17 @@ import sys
 import matplotlib.path as mpltPath
 import casadi as csd
 import matplotlib.pyplot as plt
+import matlab.engine
 
 eps = sys.float_info.epsilon
 
 # 初始化位置信息
 Position = {
-    '2': [0.7,-0.04],
-    '4': [0.48,-0.3],
-    '5': [0.13,0.028],
-    '7': [0.12,-0.54],
-    #'9': [-0.1, -0.35],
+    '2': [-0.3, 0.45],
+    '4': [-0.1, 0.15],
+    '5': [-0.3, -0.15],
+    '7': [-0.1, -0.45],
+    '9': [-0.1, -0.35],
 }
 # 无人机姿态数据
 Pose = {
@@ -24,7 +25,7 @@ Pose = {
     '4': 0.0,
     '5': 0.0,
     '7': 0.0,
-    #'9': 0.0,
+    '9': 0.0,
 }
 
 # 无人机历史控制量
@@ -33,7 +34,7 @@ u_his = {
     '4': 0.0,
     '5': 0.0,
     '7': 0.0,
-    #'9': 0.0,
+    '9': 0.0,
 }
 
 # 无人机轨迹储存
@@ -42,19 +43,19 @@ track_his = {
     '4': [[], []],
     '5': [[], []],
     '7': [[], []],
-    #'9': [[], []],
+    '9': [[], []],
 }
 
 
 STOP = False          # 中止标志位
-numIterations = 20  # 迭代次数
-xRange = 1           # 场地长度
-yRange = 1           # 场地宽度
+numIterations = 50   # 迭代次数
+xRange = 0.5           # 场地长度
+yRange = 0.7            # 场地宽度
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-vv = 0.08   # 速度
-ww = 0.8   # 角度
+vv = 0.05    # 速度
+ww = 0.5   # 角度
 T = 3.0
-N = 6
+N = 6.0
 draw = True  # 是否画图
 allcfsTime = T/N
 
@@ -67,8 +68,9 @@ if(draw):
         # 加逗号，不然取不出来
         names['line' + i], = plt.plot([], [], '.-', label='flight'+i)
         names['track_his[' + i + ']'] = [[], []]
-        names['ridges_handle' + i], = plt.plot([], [], 'k-', label='ridges')
     plt.legend()
+    for i in Position.keys():
+        names['ridges_handle' + i], = plt.plot([], [], 'k-', label='ridges')
     centroids_handle, = plt.plot([], [], 'go', label='centriods')
     
     # 规定画图范围
@@ -159,112 +161,20 @@ def centroid_region(vertices):
 
 # 卡萨帝求解
 # vertices： numpy
-def cassingle(vertices, centroid, Id):
-    Id = int(Id)
-    # 声明符号变量
-    x1 = csd.MX.sym('x1')
-    x2 = csd.MX.sym('x2')
-    x3 = csd.MX.sym('x3')
-    x = csd.vertcat(x1, x2, x3)
-    u = csd.MX.sym('u')
-    # 动力学模型
-    xdot = csd.vertcat(
-        (1 - u/ww) * vv * csd.cos(x3), (1 - u/ww) * vv * csd.sin(x3), u)
-    # 损失函数
-    L = csd.sqrt((x1 - centroid[0]) ** 2 + (x2 - centroid[1]) ** 2)
-
-    # 时间离散化
-    M = 4
-    DT = T/N/M
-    f = csd.Function('f', [x, u], [xdot, L])
-    X0 = csd.MX.sym('X0', 3)
-    U = csd.MX.sym('U')
-    X = X0
-    Q = 0
-    for j in range(M):
-        k1, k1_q = f(X, U)
-        k2, k2_q = f(X + DT/2 * k1, U)
-        k3, k3_q = f(X + DT/2 * k2, U)
-        k4, k4_q = f(X + DT * k3, U)
-        X = X+DT/6*(k1 + 2*k2 + 2*k3 + k4)
-        Q = Q + DT/6*(k1_q + 2*k2_q + 2*k3_q + k4_q)
-    F = csd.Function('F', [X0, U], [X, Q], ['x0', 'p'], ['xf', 'qf'])
-
-    # 为了计算点和线的位置情况，在顶点数组末尾拼接上第二个值
-    verticesX = np.append(vertices[:, 0], vertices[1, 0])
-    verticesY = np.append(vertices[:, 1], vertices[1, 1])
-
-    # 边界判断
-    verticesNum = vertices.shape[0] - 1
-    # 高低边界
-    lowBound = [0] * verticesNum
-    upBound = [0] * verticesNum
-
-    # 判断点与边界线的关系
-    for index in range(verticesNum):
-        if(((verticesX[index + 2] - verticesX[index]) * (verticesY[index + 1] - verticesY[index]) -
-            (verticesY[index + 2] - verticesY[index]) * (verticesX[index + 1] - verticesX[index])) > 0):
-            upBound[index] = csd.inf
-        else:
-            lowBound[index] = -csd.inf
-
-    # 初始化非线性求解器参数
-    w = []
-    w0 = []
-    lbw = []
-    ubw = []
-    J = 0
-    g = []
-    lbg = []
-    ubg = []
-
-    # 转换为虚拟姿态
-    VirtualX = round(Position[str(Id)][0] - (vv/ww) * (csd.sin(Pose[str(Id)])), 2)
-    VirtualY = round(Position[str(Id)][1] + (vv/ww) * (csd.cos(Pose[str(Id)])), 2)
-    VirtualZ = Pose[str(Id)]
-    Xk = [VirtualX, VirtualY, VirtualZ]
-
-    # 非线性求解器参数
-    for k in range(int(N)):
-        Uk = csd.MX.sym('U_' + str(k))
-        w += [Uk]
-        lbw += [-0.5]  # 控制u上界
-        ubw += [0.5]  # 控制u下界
-        w0 += [0]
-    #   w0 += [u_his[str(Id)]]
-
-        Fk = F(x0=Xk, p=Uk)
-        Xk = Fk['xf']
-        J += Fk['qf']
-
-        # 添加约束
-        for i in range(verticesNum):
-            g += [(Xk[0] + (vv/ww)*csd.sin(Xk[2]) - verticesX[i]) * (verticesY[i+1] - verticesY[i]) -
-                  (Xk[1] - (vv/ww)*csd.cos(Xk[2]) - verticesY[i]) * (verticesX[i+1] - verticesX[i])]
-
-        lbg += lowBound
-        ubg += upBound
-
-    # 创建求解器
-    prob = {'f': J, 'x': csd.vertcat(*w), 'g': csd.vertcat(*g)}
-    # 屏蔽输出，太多啦
-    # opts = {"ipopt.print_level":0, "print_time": False}
-    # solver = csd.nlpsol('solver', 'ipopt', prob, opts)
-    solver = csd.nlpsol('solver', 'ipopt', prob)
-
-    # 求解
-    sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
-    u_opt = sol['x']
-
-    # 解析求解结果，求解器输出是numpy数组，艹
-    x_opt = [[VirtualX, VirtualY, VirtualZ]]
-    for k in range(int(N)):
-        Fk = F(x0=x_opt[-1], p=u_opt[k])
-        res = Fk['xf'].full().reshape([3]).tolist()
-        x_opt += [res]
-
-    # 历史控制量
-    u_his[str(Id)] = u_opt[-1]
+def cassingle(vertices, Id):
+    # 通过matlab调用自定义casadi方法
+    print(vertices.shape, '11')
+    x_opt = eng.Minecasadi(
+        matlab.double(vertices[:, 0].tolist()), 
+        matlab.double(vertices[:, 1].tolist()), 
+        Position[Id][0], Position[Id][1], Pose[Id],
+        T, N, vv, ww)
+    x_opt = np.array(x_opt).tolist()
+    # x_opt = eng.Minecasadi(
+    #     Position[Id][0], Position[Id][1], Pose[Id], 
+    #     matlab.double(vertices[:, 0].tolist()), matlab.double(vertices[:, 1].tolist())
+    # )
+    # x_opt = np.array(x_opt).tolist()
 
     # 把第一个初始位置给移掉
     x_opt.pop(0)
@@ -309,16 +219,17 @@ def matchPoint(vor):
         vertices = vor.vertices[region + [region[0]], :]
         # 计算质心
         centroid = centroid_region(vertices)
-
+        # print(vertices, centroid)
         centroids.append(centroid)        # 判断点是否在区域内
         path = mpltPath.Path(vertices)
-
+        # inside2 = posList[path.contains_points(posList)][0,:]
         index = np.where(path.contains_points(posList))[0][0]
 
-        outPut = cassingle(vertices, centroid, Id[index])
-
+        outPut = cassingle(vertices, Id[index])
+        
         Position[Id[index]] = [pos for pos in outPut[-1][0:2]]
-
+        # print('after', Position[Id[index]])
+        # print(Id[index], Position[Id[index]])
         Pose[Id[index]] = round(outPut[-1][-1], 2)
 
         if(draw):
@@ -336,7 +247,15 @@ def matchPoint(vor):
     return waypoints
 
 
+# 中断处理函数，防止不降落
+def stop_handler(signum, frame):
+    global STOP
+    STOP = True
+    print("进程被终止，准备降落")
+
 # 位置类
+
+
 class Waypoint:
     def __init__(self, agent, x, y, rotate, duration, arrival, z=0.5):
         self.agent = agent
@@ -356,13 +275,18 @@ class Waypoint:
 
 
 if __name__ == "__main__":
+    eng = matlab.engine.start_matlab()
+    # 设置相应信号处理的handler
+    signal.signal(signal.SIGINT, stop_handler)
+    signal.signal(signal.SIGTERM, stop_handler)
+
     # 进行维诺过程
     for counter in range(numIterations):
         # 维诺划分
         vor = voronoi(np.array(
             [Position[key] for key in Position]
         ), box)
+        # print(vor.filtered_regions)
 
         waypoints = matchPoint(vor)
-
     input("Press Enter to continue...")

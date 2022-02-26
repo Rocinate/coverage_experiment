@@ -25,18 +25,18 @@ with open("online_simulation/crazyfiles.yaml", "r") as f:
 allCrazyFlies = data['files']
 
 STOP = False
-numIterations = 15
-xRange =1.0
-yRange =1.0
+numIterations = 30
+xRange =0.7
+yRange =0.95
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.08
-angularSpeed = 0.8
+lineSpeed = 0.05
+angularSpeed = 0.5
 T = 3.0
-N = 10
+N = 6
 Z = 0.5
 draw = False # 是否画图
 allcfsTime = T/N
-actualSpeed = 0.08
+actualSpeed = 0.05
 
 allWaypoints = []
 allLoss = []

@@ -30,13 +30,13 @@ numIterations = 5
 xRange = 1.
 yRange = 1.
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.07
-angularSpeed = 0.7
+lineSpeed = 0.05
+angularSpeed = 0.5
 T = 3.0
 N = 10
-draw = False # 是否画图
+draw =  False# 是否画图
 allcfsTime = T/N
-actualSpeed = 0.07
+actualSpeed = 0.05
 Z = 1.0 # 高度
 
 class CFController():

@@ -2,24 +2,29 @@
 #!/usr/bin/env python
 # 卡萨帝求解
 from casadi import *
+from matplotlib.pyplot import axis
 import numpy as np
+from scipy import interpolate
+import matplotlib.path as mpltPath
 
 class Cassingle:
-    def __init__(self, lineSpeed, angularSpeed, T, N, xRange, yRange):
+    def __init__(self, lineSpeed, angularSpeed, T, N, xRange, yRange, method="Euclidean", smooth_factor = 2):
         self.lineSpeed = lineSpeed  # 线速度
         self.angularSpeed = angularSpeed  # 角速度
         self.T = T
         self.N = N
         self.xRange = xRange
         self.yRange = yRange
+        self.smooth_factor = smooth_factor
         # 信号场强度
-        self.intensity = 1.
+        self.intensity = 1/6
         # 插值个数
         self.interpolation = 10
         self.step = 0.05
+        self.method = method
         # 范围网格
         self.gridData = np.array([
-            [round(x, 2), round(y, 2), self.intensity] for x in np.arange(-xRange, xRange, self.step) for y in np.arange(-yRange, yRange, self.step)
+            [round(x, 8), round(y, 8), self.intensity] for x in np.arange(-xRange, xRange, self.step) for y in np.arange(-yRange, yRange, self.step)
         ])
 
     def update(self, vertices, centroid, Position, Pose):
@@ -33,7 +38,24 @@ class Cassingle:
         xdot = vertcat(
             (1 - u/self.angularSpeed) * self.lineSpeed * cos(x3), (1 - u/self.angularSpeed) * self.lineSpeed * sin(x3), u)
         # 损失函数
-        L = sqrt((x1 - centroid[0]) ** 2 + (x2 - centroid[1]) ** 2)
+        if(self.method == 'Euclidean'):
+            L = sqrt((x1 - centroid[0]) ** 2 + (x2 - centroid[1]) ** 2)
+        else:
+            # 使用path判断生成的点是否在维诺区域内，并进行误差计算
+            pointsStep = 0.1
+            temp = np.array(vertices)
+            xRange = [min(temp[:, 0]), max(temp[:, 0])]
+            yRange = [min(temp[:, 1]), max(temp[:, 1])]
+            points = [
+                (x, y) 
+                for x in np.arange(xRange[0], xRange[1], pointsStep)
+                for y in np.arange(yRange[0], yRange[1], pointsStep)
+            ]
+            path = mpltPath.Path(vertices)
+            pointsInPolygon = np.array(points)[path.contains_points(points)]
+            L = 0
+            for point in pointsInPolygon:
+                L += sqrt((x1 - point[0]) ** 2 + (x2 - point[1]) ** 2)
 
         # 时间离散化
         M = 4
@@ -81,8 +103,8 @@ class Cassingle:
         ubg = []
 
         # 转换为虚拟姿态
-        VirtualX = round(Position[0] - (self.lineSpeed/self.angularSpeed) * (sin(Pose)), 2)
-        VirtualY = round(Position[1] + (self.lineSpeed/self.angularSpeed) * (cos(Pose)), 2)
+        VirtualX = round(Position[0] - (self.lineSpeed/self.angularSpeed) * (sin(Pose)), 8)
+        VirtualY = round(Position[1] + (self.lineSpeed/self.angularSpeed) * (cos(Pose)), 8)
         VirtualZ = Pose
         Xk = [VirtualX, VirtualY, VirtualZ]
 
@@ -125,22 +147,23 @@ class Cassingle:
             x_opt += [res]
 
         # 把第一个初始位置给移掉
-        x_opt.pop(0)
+        # x_opt.pop(0)
 
         # 还原为真实位置
         for positionItem in x_opt:
             # x实际位置
             positionItem[0] = round(positionItem[0] + \
-                (self.lineSpeed/self.angularSpeed) * (sin(positionItem[2])), 2)
+                (self.lineSpeed/self.angularSpeed) * (sin(positionItem[2])), 8)
             # y实际位置
             positionItem[1] = round(positionItem[1] - \
-                (self.lineSpeed/self.angularSpeed) * (cos(positionItem[2])), 2)
+                (self.lineSpeed/self.angularSpeed) * (cos(positionItem[2])), 8)
             # 限制x, y范围
             if   (positionItem[0] <= -self.xRange): positionItem[0] += 0.01
             elif (positionItem[0] >=  self.xRange): positionItem[0] -= 0.01
             if   (positionItem[1] <= -self.yRange): positionItem[1] += 0.01
             elif (positionItem[1] >=  self.yRange): positionItem[1] -= 0.01
-        return x_opt
+        x_opt.pop(0)
+        return self.opt_smooth(x_opt)
 
     # 计算loss
     def loss(self, position):
@@ -148,5 +171,21 @@ class Cassingle:
         for point in self.gridData:
             posList = position - point[0:2]
             lossList = (posList[:, 0] ** 2 + posList[: ,1] ** 2) * point[2]
-            loss += round(sqrt(lossList.min()), 2)
+            loss += round(sqrt(lossList.min()), 8)
         return loss
+
+    def opt_smooth(self, opt):
+        originNum = len(opt)
+        # 插值横坐标
+        dpi = np.linspace(0, originNum - 1, originNum)
+        np_opt = np.array(opt)
+        dpiNew = np.linspace(0, originNum - 1, originNum * self.smooth_factor)
+        fx = interpolate.interp1d(dpi, np_opt[:, 0], kind="linear") 
+        fy = interpolate.interp1d(dpi, np_opt[:, 1], kind="linear")
+        fyaw = interpolate.interp1d(dpi, np_opt[:, 2], kind="linear")
+        xNew = fx(dpiNew).reshape(originNum * self.smooth_factor, 1)
+        yNew = fy(dpiNew).reshape(originNum * self.smooth_factor, 1)
+        yawNew = fyaw(dpiNew).reshape(originNum * self.smooth_factor, 1)
+        output = np.append(np.append(xNew, yNew, axis = 1), yawNew, axis = 1)
+        return output.tolist()
+        

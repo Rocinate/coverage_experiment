@@ -1,0 +1,15 @@
+files:
+- Id: 2
+  Pose: 0.0
+  Position:
+  - -0.3
+  - 0.45
+map:
+  latRange: !!python/tuple
+  - 30.681858
+  - 30.672805
+  lngRange: !!python/tuple
+  - 104.036209
+  - 104.047042
+  xRange: 1.0
+  yRange: 1.0
