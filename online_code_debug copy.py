@@ -1,368 +1,198 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
-import signal
-import numpy as np
-import scipy.spatial as sp
 import sys
-import matplotlib.path as mpltPath
-import casadi as csd
-import matplotlib.pyplot as plt
 
-eps = sys.float_info.epsilon
+import os
 
-# 初始化位置信息
-Position = {
-    '2': [0.7,-0.04],
-    '4': [0.48,-0.3],
-    '5': [0.13,0.028],
-    '7': [0.12,-0.54],
-    #'9': [-0.1, -0.35],
-}
-# 无人机姿态数据
-Pose = {
-    '2': 0.0,
-    '4': 0.0,
-    '5': 0.0,
-    '7': 0.0,
-    #'9': 0.0,
-}
+currentUrl = os.path.dirname(__file__)
+parentUrl = os.path.abspath(os.path.join(currentUrl, os.pardir))
+sys.path.append(parentUrl)
 
-# 无人机历史控制量
-u_his = {
-    '2': 0.0,
-    '4': 0.0,
-    '5': 0.0,
-    '7': 0.0,
-    #'9': 0.0,
-}
+from pycrazyswarm import *
+import yaml
+import numpy as np
+from borderdVoronoi import Vor
+from cassingle import Cassingle
+from graphController import Graph
+import time
+from tqdm.notebook import trange
+import math
 
-# 无人机轨迹储存
-track_his = {
-    '2': [[], []],
-    '4': [[], []],
-    '5': [[], []],
-    '7': [[], []],
-    #'9': [[], []],
-}
+# 读取无人机位置配置
+with open("online_simulation/crazyfiles.yaml", "r") as f:
+    data = yaml.load(f)
 
+allCrazyFlies = data['files']
 
-STOP = False          # 中止标志位
-numIterations = 20  # 迭代次数
-xRange = 1           # 场地长度
-yRange = 1           # 场地宽度
+STOP = False
+numIterations = 5
+xRange = 1.
+yRange = 1.
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-vv = 0.08   # 速度
-ww = 0.8   # 角度
+lineSpeed = 0.05
+angularSpeed = 0.5
 T = 3.0
 N = 6
-draw = True  # 是否画图
+draw =  False# 是否画图
 allcfsTime = T/N
+actualSpeed = 0.05
+Z = 1.0 # 高度
 
-# 创建绘图句柄
-if(draw):
-    fig, ax = plt.subplots()
-    # 根据无人机ID动态申请变量
-    names = locals()
-    for i in Position.keys():
-        # 加逗号，不然取不出来
-        names['line' + i], = plt.plot([], [], '.-', label='flight'+i)
-        names['track_his[' + i + ']'] = [[], []]
-        names['ridges_handle' + i], = plt.plot([], [], 'k-', label='ridges')
-    plt.legend()
-    centroids_handle, = plt.plot([], [], 'go', label='centriods')
-    
-    # 规定画图范围
-    ax.set_xlim([-xRange, xRange])
-    ax.set_ylim([-yRange, yRange])
+class CFController():
+    def __init__(self):
+        self.executeNumber = 0
+        names = self.__dict__
 
-# 判断点是否在场地范围内
+        for cf in allCrazyFlies:
+            names['lastYaw'+str(cf['Id'])] = 0.0
 
+    def startFlies(self):
+        print('Start flying!')
 
-def in_box(towers, bounding_box):
-    return np.logical_and(np.logical_and(bounding_box[0] <= towers[:, 0],
-                                         towers[:, 0] <= bounding_box[1]),
-                          np.logical_and(bounding_box[2] <= towers[:, 1],
-                                         towers[:, 1] <= bounding_box[3]))
+        # 创建无人机实例
+        swarm = Crazyswarm()
+        self.timeHelper = swarm.timeHelper
+        self.allcfs = swarm.allcfs
 
-# 利用对称性质，生成带有边界点的维诺划分
+        # 所有无人机同时起飞
+        self.allcfs.takeoff(targetHeight=Z, duration=1.0)
+        # 等待2秒
+        self.timeHelper.sleep(2.0)
 
+    # 按照轨迹进行巡航
+    def goWaypoints(self, waypoints):
+        kPosition = 1.
+        # 获取无人机字典
+        allcfsDict = self.allcfs.crazyfliesById
 
-def voronoi(towers, bounding_box):
-    # print('towers: ', towers)
-    # 选取在范围内的点
-    i = in_box(towers, bounding_box)
-    # print(i)
-    # 对范围内的点按照边界进行镜像
-    points_center = towers[i, :]
-    points_left = np.copy(points_center)
-    points_left[:, 0] = bounding_box[0] - (points_left[:, 0] - bounding_box[0])
-    points_right = np.copy(points_center)
-    points_right[:, 0] = bounding_box[1] + \
-        (bounding_box[1] - points_right[:, 0])
-    points_down = np.copy(points_center)
-    points_down[:, 1] = bounding_box[2] - (points_down[:, 1] - bounding_box[2])
-    points_up = np.copy(points_center)
-    points_up[:, 1] = bounding_box[3] + (bounding_box[3] - points_up[:, 1])
-    points = np.append(points_center,
-                       np.append(np.append(points_left,
-                                           points_right,
-                                           axis=0),
-                                 np.append(points_down,
-                                           points_up,
-                                           axis=0),
-                                 axis=0),
-                       axis=0)
-    # 计算维诺划分
-    vor = sp.Voronoi(points)
-    # 过滤无限划分区域
-    regions = []
-    for region in vor.regions:
-        flag = True
-        for index in region:
-            if index == -1:
-                flag = False
-                break
-            else:
-                x = round(vor.vertices[index, 0], 2)
-                y = round(vor.vertices[index, 1], 2)
-                if not(bounding_box[0] - eps <= x and x <= bounding_box[1] + eps and
-                       bounding_box[2] - eps <= y and y <= bounding_box[3] + eps):
-                    flag = False
+        for waypoint in waypoints:
+            # 取出实际位置和速度
+            vx = actualSpeed * np.cos(waypoint['theta'])
+            vy = actualSpeed * np.sin(waypoint['theta'])
+            desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
+
+            # 获取对应ID的无人机控制器实例
+            cf = allcfsDict[waypoint['Id']]
+
+            error = desiredPos - cf.position()
+
+            exec("yawRate = round((waypoint['theta'] - self.lastYaw{}) / math.pi * 180, 2)".format(waypoint['Id']))
+            exec("self.lastYaw{} = waypoint['theta']".format(waypoint['Id']))
+
+            cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate=yawRate)
+
+            self.executeNumber += 1
+            if(self.executeNumber == len(allCrazyFlies)):
+                self.timeHelper.sleepForRate(float(N)/T)
+                self.executeNumber = 0
+
+    # 降落
+    def goLand(self):
+        print('Land!')
+        allcfsDict = self.allcfs.crazyfliesById
+        cfs = allcfsDict.values()
+        i = 0
+        startTime = self.timeHelper.time()
+        while True:
+            i=i+1
+            for cf in cfs:
+                current_pos=cf.position()
+                if current_pos[-1]>0.05:
+                    vx=0
+                    vy=0
+                    vz=-0.1
+                    cf.cmdVelocityWorld(np.array([vx, vy, vz] ), yawRate=0)
+                    self.timeHelper.sleepForRate(float(N)/T)
+                else:
+                    cf.cmdStop()
+                    cfs.remove(cf)
+            if len(cfs)==0:
                     break
-        if region != [] and flag:
-            regions.append(region)
-    vor.filtered_points = points_center
-    vor.filtered_regions = regions
-    return vor
+        endTime=self.timeHelper.time()
+        print('Total loop number of landing is '+str(i))
+        print('Total land time is '+str(endTime-startTime))
 
-# 维诺质心计算
-
-
-def centroid_region(vertices):
-    # Polygon's signed area
-    A = 0
-    # Centroid's x
-    C_x = 0
-    # Centroid's y
-    C_y = 0
-    for i in range(0, len(vertices) - 1):
-        s = (vertices[i, 0] * vertices[i + 1, 1] -
-             vertices[i + 1, 0] * vertices[i, 1])
-        A = A + s
-        C_x = C_x + (vertices[i, 0] + vertices[i + 1, 0]) * s
-        C_y = C_y + (vertices[i, 1] + vertices[i + 1, 1]) * s
-    A = 0.5 * A
-    C_x = (1.0 / (6.0 * A)) * C_x
-    C_y = (1.0 / (6.0 * A)) * C_y
-    return [C_x, C_y]
-
-
-# 卡萨帝求解
-# vertices： numpy
-def cassingle(vertices, centroid, Id):
-    Id = int(Id)
-    # 声明符号变量
-    x1 = csd.MX.sym('x1')
-    x2 = csd.MX.sym('x2')
-    x3 = csd.MX.sym('x3')
-    x = csd.vertcat(x1, x2, x3)
-    u = csd.MX.sym('u')
-    # 动力学模型
-    xdot = csd.vertcat(
-        (1 - u/ww) * vv * csd.cos(x3), (1 - u/ww) * vv * csd.sin(x3), u)
-    # 损失函数
-    L = csd.sqrt((x1 - centroid[0]) ** 2 + (x2 - centroid[1]) ** 2)
-
-    # 时间离散化
-    M = 4
-    DT = T/N/M
-    f = csd.Function('f', [x, u], [xdot, L])
-    X0 = csd.MX.sym('X0', 3)
-    U = csd.MX.sym('U')
-    X = X0
-    Q = 0
-    for j in range(M):
-        k1, k1_q = f(X, U)
-        k2, k2_q = f(X + DT/2 * k1, U)
-        k3, k3_q = f(X + DT/2 * k2, U)
-        k4, k4_q = f(X + DT * k3, U)
-        X = X+DT/6*(k1 + 2*k2 + 2*k3 + k4)
-        Q = Q + DT/6*(k1_q + 2*k2_q + 2*k3_q + k4_q)
-    F = csd.Function('F', [X0, U], [X, Q], ['x0', 'p'], ['xf', 'qf'])
-
-    # 为了计算点和线的位置情况，在顶点数组末尾拼接上第二个值
-    verticesX = np.append(vertices[:, 0], vertices[1, 0])
-    verticesY = np.append(vertices[:, 1], vertices[1, 1])
-
-    # 边界判断
-    verticesNum = vertices.shape[0] - 1
-    # 高低边界
-    lowBound = [0] * verticesNum
-    upBound = [0] * verticesNum
-
-    # 判断点与边界线的关系
-    for index in range(verticesNum):
-        if(((verticesX[index + 2] - verticesX[index]) * (verticesY[index + 1] - verticesY[index]) -
-            (verticesY[index + 2] - verticesY[index]) * (verticesX[index + 1] - verticesX[index])) > 0):
-            upBound[index] = csd.inf
-        else:
-            lowBound[index] = -csd.inf
-
-    # 初始化非线性求解器参数
-    w = []
-    w0 = []
-    lbw = []
-    ubw = []
-    J = 0
-    g = []
-    lbg = []
-    ubg = []
-
-    # 转换为虚拟姿态
-    VirtualX = round(Position[str(Id)][0] - (vv/ww) * (csd.sin(Pose[str(Id)])), 2)
-    VirtualY = round(Position[str(Id)][1] + (vv/ww) * (csd.cos(Pose[str(Id)])), 2)
-    VirtualZ = Pose[str(Id)]
-    Xk = [VirtualX, VirtualY, VirtualZ]
-
-    # 非线性求解器参数
-    for k in range(int(N)):
-        Uk = csd.MX.sym('U_' + str(k))
-        w += [Uk]
-        lbw += [-0.5]  # 控制u上界
-        ubw += [0.5]  # 控制u下界
-        w0 += [0]
-    #   w0 += [u_his[str(Id)]]
-
-        Fk = F(x0=Xk, p=Uk)
-        Xk = Fk['xf']
-        J += Fk['qf']
-
-        # 添加约束
-        for i in range(verticesNum):
-            g += [(Xk[0] + (vv/ww)*csd.sin(Xk[2]) - verticesX[i]) * (verticesY[i+1] - verticesY[i]) -
-                  (Xk[1] - (vv/ww)*csd.cos(Xk[2]) - verticesY[i]) * (verticesX[i+1] - verticesX[i])]
-
-        lbg += lowBound
-        ubg += upBound
-
-    # 创建求解器
-    prob = {'f': J, 'x': csd.vertcat(*w), 'g': csd.vertcat(*g)}
-    # 屏蔽输出，太多啦
-    # opts = {"ipopt.print_level":0, "print_time": False}
-    # solver = csd.nlpsol('solver', 'ipopt', prob, opts)
-    solver = csd.nlpsol('solver', 'ipopt', prob)
-
-    # 求解
-    sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
-    u_opt = sol['x']
-
-    # 解析求解结果，求解器输出是numpy数组，艹
-    x_opt = [[VirtualX, VirtualY, VirtualZ]]
-    for k in range(int(N)):
-        Fk = F(x0=x_opt[-1], p=u_opt[k])
-        res = Fk['xf'].full().reshape([3]).tolist()
-        x_opt += [res]
-
-    # 历史控制量
-    u_his[str(Id)] = u_opt[-1]
-
-    # 把第一个初始位置给移掉
-    x_opt.pop(0)
-    # 还原为真实位置
-    for positionItem in x_opt:
-        # x实际位置
-        positionItem[0] = round(positionItem[0] + \
-            (vv/ww) * (csd.sin(positionItem[2])), 2)
-        # y实际位置
-        positionItem[1] = round(positionItem[1] - \
-            (vv/ww) * (csd.cos(positionItem[2])), 2)
-        # 限制x, y范围
-        if   (positionItem[0] <= -xRange): positionItem[0] += 0.01
-        elif (positionItem[0] >=  xRange): positionItem[0] -= 0.01
-        if   (positionItem[1] <= -yRange): positionItem[1] += 0.01
-        elif (positionItem[1] >=  yRange): positionItem[1] -= 0.01
-    return x_opt
-
-# 画图画图
-def plotTrack(waypoints, Id, centroid, ridges):
-    data = np.array(waypoints)
-    # 根据ID动态执行
-    exec("track_his['{}'][0].append(data[:, 0].tolist())".format(Id))
-    exec("track_his['{}'][1].append(data[:, 1].tolist())".format(Id))
-    exec("line{}.set_data(track_his['{}'][0], track_his['{}'][1])".format(
-        Id, Id, Id))
-    exec("ridges_handle{}.set_data(ridges[:, 0], ridges[:, 1])".format(Id))
-    if(len(centroid) == len(Position)):
-        centroids_handle.set_data(centroid[:, 0], centroid[:, 1])
-    
-    plt.pause(0.0001)
-
-
-# 匹配维诺区域与无人机，返回无人机位置序列
-def matchPoint(vor):
-    waypoints = []
-    centroids = []
-    posList = np.array([Position[key] for key in Position])
-    Id = list(Position.keys())
-    # 对维诺区域进行遍历
-    for region in vor.filtered_regions:
-        vertices = vor.vertices[region + [region[0]], :]
-        # 计算质心
-        centroid = centroid_region(vertices)
-
-        centroids.append(centroid)        # 判断点是否在区域内
-        path = mpltPath.Path(vertices)
-
-        index = np.where(path.contains_points(posList))[0][0]
-
-        outPut = cassingle(vertices, centroid, Id[index])
-
-        Position[Id[index]] = [pos for pos in outPut[-1][0:2]]
-
-        Pose[Id[index]] = round(outPut[-1][-1], 2)
-
-        if(draw):
-            plotTrack(outPut, Id[index], np.array(centroids), vertices)
-
-        for timeOrder, item in enumerate(outPut):
-            waypoints.append(Waypoint(
-                int(Id[index]),
-                item[0],
-                item[1],
-                item[2],
-                allcfsTime,
-                timeOrder
-            ))
-    return waypoints
-
-
-# 位置类
-class Waypoint:
-    def __init__(self, agent, x, y, rotate, duration, arrival, z=0.5):
-        self.agent = agent
-        self.x = x
-        self.y = y
-        self.z = z
-        self.rotate = rotate
-        self.duration = duration
-        self.arrival = arrival
-
-    # 方便根据时间序列进行排序
-    def __lt__(self, other):
-        return self.arrival < other.arrival
-
-    def __repr__(self):
-        return "Ag {}. [{}, {}, {}]".format(self.agent, self.x, self.y, self.z)
 
 
 if __name__ == "__main__":
-    # 进行维诺过程
-    for counter in range(numIterations):
-        # 维诺划分
-        vor = voronoi(np.array(
-            [Position[key] for key in Position]
-        ), box)
+    # 时间统计
+    start = time.clock()
 
-        waypoints = matchPoint(vor)
+    vor = Vor(box, lineSpeed, angularSpeed)
 
-    input("Press Enter to continue...")
+    cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, method="objective")
+
+    graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
+
+    cfController = CFController()
+
+    allWaypoints = []
+
+    print("start calculating!")
+
+    for counter in trange(numIterations):
+        # 更新维诺划分，下面过程中需要真实的和虚拟的位置
+        vorResult = vor.updateVor(allCrazyFlies)
+        virtualResult = vor.virtualVor(allCrazyFlies)
+
+        waypoints = []
+        for flie in vorResult:
+            # 找出对应Id储存在allcrazyfiles中的索引
+            [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == flie['Id']]
+
+            # 找到对应Id的虚拟维诺划分
+            virtualFlie = [virtual for virtual in virtualResult if virtual['Id'] == flie['Id']]
+
+            # casadi运算下一步位置
+            outPut = cassingle.update(
+                flie['vertices'],
+                flie['centroid'],
+                virtualFlie['vertices'],
+                virtualFlie['centroid'],
+                allCrazyFlies[matchIndex]['Position'],
+                allCrazyFlies[matchIndex]['Pose']
+            )
+
+            allCrazyFlies[matchIndex]['Position'] = [pos for pos in outPut[-1][0:2]]
+            allCrazyFlies[matchIndex]['Pose'] = round(outPut[-1][-1], 2)
+            
+            draw and graph.updateTrack(
+                np.array(outPut), 
+                allCrazyFlies[matchIndex]['Id']
+            )
+
+            for timeIndex, item in enumerate(outPut):
+                waypoints.append({
+                    'Id': allCrazyFlies[matchIndex]['Id'],
+                    'Px': item[0],
+                    'Py': item[1],
+                    'theta': item[2],
+                    'index': timeIndex
+                })
+
+        # 根据时间索引进行排序
+        waypoints = sorted(waypoints, key = lambda i: i['index'])
+
+        allWaypoints.append(waypoints)
+
+        # 更新维诺质心
+        draw and graph.updateCentroid(
+            np.array([cf['centroid'] for cf in vorResult]) # 真实位置维诺质心
+            # np.array([cf['centroid'] for cf in virtualResult])
+        )
+        
+        # 使用虚拟位置更新维诺边界
+        draw and graph.updateRidges(virtualResult)
+        # draw and graph.updateRidges(vorResult)
+    
+    print("casadi down, execute all waypoints")
+
+    cfController.startFlies()
+    for waypoints in allWaypoints:
+        # 实时飞行
+        cfController.goWaypoints(waypoints)
+
+    # 降落
+    cfController.goLand()
+
+    print("couse: {}s to go through all program".format(time.clock() - start))

@@ -27,7 +27,7 @@ class Cassingle:
             [round(x, 8), round(y, 8), self.intensity] for x in np.arange(-xRange, xRange, self.step) for y in np.arange(-yRange, yRange, self.step)
         ])
 
-    def update(self, vertices, centroid, Position, Pose):
+    def update(self, vertices, centroid, virtual_vertices, virtual_centroid, Position, Pose):
         # 声明符号变量
         x1 = MX.sym('x1')
         x2 = MX.sym('x2')
@@ -43,15 +43,15 @@ class Cassingle:
         else:
             # 使用path判断生成的点是否在维诺区域内，并进行误差计算
             pointsStep = 0.1
-            temp = np.array(vertices)
+            temp = np.array(virtual_vertices)
             xRange = [min(temp[:, 0]), max(temp[:, 0])]
             yRange = [min(temp[:, 1]), max(temp[:, 1])]
             points = [
-                (x, y) 
+                (x, y)
                 for x in np.arange(xRange[0], xRange[1], pointsStep)
                 for y in np.arange(yRange[0], yRange[1], pointsStep)
             ]
-            path = mpltPath.Path(vertices)
+            path = mpltPath.Path(virtual_vertices)
             pointsInPolygon = np.array(points)[path.contains_points(points)]
             L = 0
             for point in pointsInPolygon:
