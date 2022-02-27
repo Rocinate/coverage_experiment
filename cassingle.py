@@ -48,9 +48,9 @@ class Cassingle:
             xRange = [min(temp[:, 0]), max(temp[:, 0])]
             yRange = [min(temp[:, 1]), max(temp[:, 1])]
             points = [
-                (x, y)
-                for x in np.linspace(xRange[0], xRange[1], self.xInter)
-                for y in np.linspace(yRange[0], yRange[1], self.yInter)
+                (xPos, yPos)
+                for xPos in np.linspace(xRange[0], xRange[1], self.xInter)
+                for yPos in np.linspace(yRange[0], yRange[1], self.yInter)
             ]
             # print(points)
             path = mpltPath.Path(virtual_vertices)
