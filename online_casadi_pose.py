@@ -6,6 +6,8 @@ import yaml
 import numpy as np
 import time
 import math
+import threading
+from queue import Queue
 
 # if python3
 time.clock = time.time
@@ -19,6 +21,8 @@ sys.path.append(parentUrl)
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--local", help="Run using local simulation.", action="store_true")
+parser.add_argument("--record", help="save the waypoints.", action="store_true")
+parser.add_argument("--load", help="load waypoints from record.", action="store_true")
 args = parser.parse_args()
 
 if not args.local:
@@ -35,9 +39,9 @@ from graphController import Graph
 # with open("online_simulation/crazyfiles.yaml", "r") as f:
 with open("crazyfiles.yaml", "r") as f:
     data = yaml.load(f)
-
 allCrazyFlies = data['files']
 
+# 实验参数
 STOP = False
 numIterations = 40
 xRange = 3.5
@@ -51,8 +55,19 @@ N = 10
 allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
+threadNum = 4 # 线程数
+queueSize = 20 # 队列大小
 
-if __name__ == "__main__":
+def multiThreads():
+    # 线程名称
+    casadiLists = ["Thread"+str(i) for i in range(1, 1+threadNum)]
+    # 储存列表
+    threadList = []
+    for threadName in casadiLists:
+        pass
+
+# 通过casadi计算得到结果
+def getWaypoint():
     # 时间统计
     start = time.clock()
 
@@ -61,9 +76,6 @@ if __name__ == "__main__":
     cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, volume, method="objective")
 
     graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
-
-    if not args.local:
-        cfController = CFController(allCrazyFlies, N, T, Z, lineSpeed)
 
     allWaypoints = []
 
@@ -128,7 +140,30 @@ if __name__ == "__main__":
         draw and graph.updateRidges(virtualResult)
         # draw and graph.updateRidges(vorResult)
 
+    print("consume: {}s to go through casadi".format(time.clock() - start))
+
+    return allWaypoints
+
+if __name__ == "__main__":
+    allWaypoints = []
+
+    # --load从本地文件直接读取路径结果
+    if args.load:
+        f = open("text.txt", "rb")
+        allWaypoints = pickle.load(f)
+        f.close()
+    else:
+        allwaypoints = getWaypoint()
+
+    # --record, 记录路径结果到本地txt文件，方便直接读取
+    if args.record:
+        import pickle
+        f = open("record.txt", "wb")
+        pickle.dump(allWaypoints, f)
+        f.close()
+
     if not args.local:
+        cfController = CFController(allCrazyFlies, N, T, Z, lineSpeed)
         print("casadi down, execute all waypoints")
 
         cfController.startFlies()
@@ -138,8 +173,3 @@ if __name__ == "__main__":
 
         # 降落
         cfController.goLand()
-
-    else:
-        print("casadi down")
-
-    print("consume: {}s to go through all program".format(time.clock() - start))

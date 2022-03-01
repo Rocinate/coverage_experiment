@@ -52,7 +52,6 @@ class Cassingle:
                 for xPos in np.linspace(xRange[0], xRange[1], self.xInter)
                 for yPos in np.linspace(yRange[0], yRange[1], self.yInter)
             ]
-            # print(points)
             path = mpltPath.Path(virtual_vertices)
             pointsInPolygon = np.array(points)[path.contains_points(points)]
             L = 0
