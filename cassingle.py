@@ -173,6 +173,10 @@ class Cassingle:
             elif (positionItem[0] >=  self.xRange): positionItem[0] -= 0.01
             if   (positionItem[1] <= -self.yRange): positionItem[1] += 0.01
             elif (positionItem[1] >=  self.yRange): positionItem[1] -= 0.01
+            # if   (positionItem[0] <= -self.xRange): positionItem[0] = -self.xRange + 0.01
+            # elif (positionItem[0] >=  self.xRange): positionItem[0] =  self.xRange - 0.01
+            # if   (positionItem[1] <= -self.yRange): positionItem[1] = -self.yRange + 0.01
+            # elif (positionItem[1] >=  self.yRange): positionItem[1] =  self.yRange - 0.01
         x_opt.pop(0)
 
         # 无需插值

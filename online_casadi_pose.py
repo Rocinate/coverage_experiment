@@ -6,8 +6,7 @@ import yaml
 import numpy as np
 import time
 import math
-import threading
-from queue import Queue
+from multiprocessing import Process, Queue
 
 # if python3
 time.clock = time.time
@@ -44,61 +43,51 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 numIterations = 40
-xRange = 3.5
-yRange = 2.5
+xRange = 3.3
+yRange = 2.3
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.1
-angularSpeed = 0.2
+lineSpeed = 0.25
+angularSpeed = 0.75
 draw =  True# 是否画图
-T = 5.0
-N = 10
+T = 1.0
+N = 3
 allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
-threadNum = 4 # 线程数
+processNum = 4 # 线程数
 
-class workers(threading.Thread):
-    def __init__(self, q, name, cassingle):
-        threading.Thread.__init__(self)
+class workers(Process):
+    def __init__(self, q, name, res):
+        Process.__init__(self)
         self.q = q
+        self.res = res
         self.name = name
-        self.cassingle = cassingle
-        self.busy = False
-        self.running = True
-        self.res = None
 
     def run(self):
         print(self.name+" started!")
-        while self.running:
+        while True:
             if not self.q.empty():
                 try:
-                    self.busy = True
-                    self.res = None
-                    flie, virtualResult = self.q.get(False)
-                    self.res = vorProcess(flie, virtualResult, self.cassingle)
-                    self.busy = False
+                    flie, virtualResult, cassingle, allCrazyFlies = self.q.get(False)
+                    self.res.put(vorProcess(flie, virtualResult, cassingle, allCrazyFlies))
                 except Exception as e:
                     print("queue empty!", e)
 
-    def terminate(self):
-        self.running = False
-
-def multiThreads(taskPool, cassingle):
+def multiProcess(taskPool, resultStorage):
     # 线程名称
-    casadiLists = ["Thread"+str(i) for i in range(1, 1+threadNum)]
+    casadiLists = ["Process"+str(i) for i in range(1, 1+processNum)]
     # 储存列表
-    threadList = []
+    processList = []
 
-    for threadName in casadiLists:
-        thread = workers(taskPool, threadName, cassingle)
-        thread.start()
-        threadList.append(thread)
+    for processName in casadiLists:
+        process = workers(taskPool, processName, resultStorage)
+        process.start()
+        processList.append(process)
 
-    return threadList
+    return processList
 
-def vorProcess(flie, virtualResult, cassingle):
+def vorProcess(flie, virtualResult, cassingle, allCrazyFlies):
     waypoints = []
-    print(flie['Id'])
     # 找出对应Id储存在allcrazyfiles中的索引
     [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == flie['Id']]
 
@@ -114,8 +103,8 @@ def vorProcess(flie, virtualResult, cassingle):
         allCrazyFlies[matchIndex]['Pose']
     )
 
-    allCrazyFlies[matchIndex]['Position'] = [pos for pos in outPut[-1][0:2]]
-    allCrazyFlies[matchIndex]['Pose'] = round(outPut[-1][-1], 2)
+    newPosition = [pos for pos in outPut[-1][0:2]]
+    newPose = round(outPut[-1][-1], 2)
 
     for timeIndex, item in enumerate(outPut):
         waypoints.append({
@@ -126,7 +115,15 @@ def vorProcess(flie, virtualResult, cassingle):
             'index': timeIndex
         })
 
-    return np.array(outPut), allCrazyFlies[matchIndex]['Id'], waypoints
+    info = {
+        "track": np.array(outPut),
+        "Id": allCrazyFlies[matchIndex]['Id'],
+        "newPosition": newPosition,
+        "newPose": newPose,
+        "waypoints": waypoints
+    }
+
+    return info
 
 # 通过casadi计算得到结果
 def getWaypoint():
@@ -144,7 +141,9 @@ def getWaypoint():
 
     taskPool = Queue() # 根据参数创建队列
 
-    threadList = multiThreads(taskPool, cassingle)
+    resultStorage = Queue() # 储存进程运算结果的队列
+
+    processList = multiProcess(taskPool, resultStorage)
 
     print("start calculating!")
 
@@ -159,21 +158,26 @@ def getWaypoint():
         virtualResult = vor.virtualVor(allCrazyFlies)
 
         for flie in vorResult:
-            taskPool.put((flie, virtualResult))
+            taskPool.put((flie, virtualResult, cassingle, allCrazyFlies))
 
         # 等待所有的任务执行完毕
         while True:
-            if all([not thread.busy for thread in threadList]):
+            # print(resultStorage.qsize())
+            if resultStorage.qsize() == 5:
                 break
 
         waypoints = []
         # 将线程结果绘画出来
-        for thread in threadList:
+        while not resultStorage.empty():
+            info = resultStorage.get()
+            [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == info["Id"]]
+            allCrazyFlies[matchIndex]['Position'] = info['newPosition']
+            allCrazyFlies[matchIndex]['Pose'] = info['newPose']
             draw and graph.updateTrack(
-                    thread.res[0],
-                    thread.res[1]
+                    info['track'],
+                    allCrazyFlies[matchIndex]['Id']
                 )
-            waypoints.append(thread.res[2])
+            waypoints += info['waypoints']
 
         # 根据时间索引进行排序
         waypoints = sorted(waypoints, key = lambda i: i['index'])
@@ -193,10 +197,10 @@ def getWaypoint():
     print("consume: {}s to go through casadi".format(time.clock() - start))
 
     # 关闭所有子线程
-    for thread in threadList:
-        thread.terminate()
+    for process in processList:
+        process.terminate()
 
-    print("all children threads closed.")
+    print("all children process closed.")
 
     return allWaypoints
 
