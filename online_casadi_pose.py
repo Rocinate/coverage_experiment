@@ -171,7 +171,7 @@ def getWaypoint():
                 print("flies out of range, program exit!")
                 sys.exit(0)
             # print(resultStorage.qsize())
-            if resultStorage.qsize() == 5:
+            if resultStorage.qsize() == len(allCrazyFlies):
                 break
 
         waypoints = []
