@@ -43,18 +43,18 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 numIterations = 40
-xRange = 3.3
-yRange = 2.3
+xRange = 4.0
+yRange = 2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.25
-angularSpeed = 0.75
+lineSpeed = 0.15
+angularSpeed = 0.6
 draw =  True# 是否画图
-T = 1.0
-N = 3
+T = 2.0
+N = 5
 allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
-processNum = 5 # 线程数
+processNum = len(allCrazyFlies) # 线程数，默认和无人机个数相同
 calculTimeOut = 10 # 每轮运算超时设定
 
 class workers(Process):
@@ -84,7 +84,8 @@ def multiProcess(taskPool, resultStorage):
         # 创建新进程，传递输入和输出列表
         process = workers(taskPool, processName, resultStorage)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
-        process.setDaemon(True)
+        # process.setDaemon(True)
+        process.daemon = True
         process.start()
         processList.append(process)
 
@@ -162,6 +163,7 @@ def getWaypoint():
         vorResult = vor.updateVor(allCrazyFlies)
         virtualResult = vor.virtualVor(allCrazyFlies)
 
+        # 将任务发布到队列中，等待守护进程进行处理
         for flie in vorResult:
             taskPool.put((flie, virtualResult, cassingle, allCrazyFlies))
 
@@ -178,7 +180,7 @@ def getWaypoint():
                 break
 
         waypoints = []
-        
+
         # 将进程结果取出绘画出来
         while not resultStorage.empty():
             info = resultStorage.get()
