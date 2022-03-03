@@ -54,7 +54,8 @@ N = 3
 allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
-processNum = 4 # 线程数
+processNum = 5 # 线程数
+calculTimeOut = 10 # 每轮运算超时设定
 
 class workers(Process):
     def __init__(self, q, name, res):
@@ -71,7 +72,7 @@ class workers(Process):
                     flie, virtualResult, cassingle, allCrazyFlies = self.q.get(False)
                     self.res.put(vorProcess(flie, virtualResult, cassingle, allCrazyFlies))
                 except Exception as e:
-                    print("queue empty!", e)
+                    pass
 
 def multiProcess(taskPool, resultStorage):
     # 线程名称
@@ -160,8 +161,15 @@ def getWaypoint():
         for flie in vorResult:
             taskPool.put((flie, virtualResult, cassingle, allCrazyFlies))
 
+        calculTime = time.clock()
         # 等待所有的任务执行完毕
         while True:
+            if time.clock() - calculTime > calculTimeOut:
+                # 关闭所有子线程
+                for process in processList:
+                    process.terminate()
+                print("flies out of range, program exit!")
+                sys.exit(0)
             # print(resultStorage.qsize())
             if resultStorage.qsize() == 5:
                 break
