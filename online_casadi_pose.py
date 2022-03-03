@@ -81,7 +81,10 @@ def multiProcess(taskPool, resultStorage):
     processList = []
 
     for processName in casadiLists:
+        # 创建新进程，传递输入和输出列表
         process = workers(taskPool, processName, resultStorage)
+        # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
+        process.setDaemon(True)
         process.start()
         processList.append(process)
 
@@ -104,6 +107,7 @@ def vorProcess(flie, virtualResult, cassingle, allCrazyFlies):
         allCrazyFlies[matchIndex]['Pose']
     )
 
+    # 待更新的位置信息
     newPosition = [pos for pos in outPut[-1][0:2]]
     newPose = round(outPut[-1][-1], 2)
 
@@ -162,20 +166,20 @@ def getWaypoint():
             taskPool.put((flie, virtualResult, cassingle, allCrazyFlies))
 
         calculTime = time.clock()
+
         # 等待所有的任务执行完毕
         while True:
+            # 超时，程序退出
             if time.clock() - calculTime > calculTimeOut:
-                # 关闭所有子线程
-                for process in processList:
-                    process.terminate()
                 print("flies out of range, program exit!")
                 sys.exit(0)
-            # print(resultStorage.qsize())
+
             if resultStorage.qsize() == len(allCrazyFlies):
                 break
 
         waypoints = []
-        # 将线程结果绘画出来
+        
+        # 将进程结果取出绘画出来
         while not resultStorage.empty():
             info = resultStorage.get()
             [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == info["Id"]]
@@ -203,10 +207,6 @@ def getWaypoint():
         # draw and graph.updateRidges(vorResult)
 
     print("consume: {}s to go through casadi".format(time.clock() - start))
-
-    # 关闭所有子线程
-    for process in processList:
-        process.terminate()
 
     print("all children process closed.")
 
