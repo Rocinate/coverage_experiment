@@ -56,15 +56,77 @@ allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
 threadNum = 4 # 线程数
-queueSize = 20 # 队列大小
 
-def multiThreads():
+class workers(threading.Thread):
+    def __init__(self, q, name, cassingle):
+        threading.Thread.__init__(self)
+        self.q = q
+        self.name = name
+        self.cassingle = cassingle
+        self.busy = False
+        self.running = True
+        self.res = None
+
+    def run(self):
+        print(self.name+" started!")
+        while self.running:
+            if not self.q.empty():
+                try:
+                    self.busy = True
+                    self.res = None
+                    flie, virtualResult = self.q.get(False)
+                    self.res = vorProcess(flie, virtualResult, self.cassingle)
+                    self.busy = False
+                except Exception as e:
+                    print("queue empty!", e)
+
+    def terminate(self):
+        self.running = False
+
+def multiThreads(taskPool, cassingle):
     # 线程名称
     casadiLists = ["Thread"+str(i) for i in range(1, 1+threadNum)]
     # 储存列表
     threadList = []
+
     for threadName in casadiLists:
-        pass
+        thread = workers(taskPool, threadName, cassingle)
+        thread.start()
+        threadList.append(thread)
+
+    return threadList
+
+def vorProcess(flie, virtualResult, cassingle):
+    waypoints = []
+    print(flie['Id'])
+    # 找出对应Id储存在allcrazyfiles中的索引
+    [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == flie['Id']]
+
+    # 找到对应Id的虚拟维诺划分
+    virtualFlie = [virtual for virtual in virtualResult if virtual['Id'] == flie['Id']][0]
+
+    # casadi运算下一步位置
+    outPut = cassingle.update(
+        flie['vertices'],
+        flie['centroid'],
+        virtualFlie['vertices'],
+        allCrazyFlies[matchIndex]['Position'],
+        allCrazyFlies[matchIndex]['Pose']
+    )
+
+    allCrazyFlies[matchIndex]['Position'] = [pos for pos in outPut[-1][0:2]]
+    allCrazyFlies[matchIndex]['Pose'] = round(outPut[-1][-1], 2)
+
+    for timeIndex, item in enumerate(outPut):
+        waypoints.append({
+            'Id': allCrazyFlies[matchIndex]['Id'],
+            'Px': item[0],
+            'Py': item[1],
+            'theta': item[2],
+            'index': timeIndex
+        })
+
+    return np.array(outPut), allCrazyFlies[matchIndex]['Id'], waypoints
 
 # 通过casadi计算得到结果
 def getWaypoint():
@@ -75,9 +137,14 @@ def getWaypoint():
 
     cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, volume, method="objective")
 
-    graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
+    if draw:
+        graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
 
     allWaypoints = []
+
+    taskPool = Queue() # 根据参数创建队列
+
+    threadList = multiThreads(taskPool, cassingle)
 
     print("start calculating!")
 
@@ -91,39 +158,22 @@ def getWaypoint():
         vorResult = vor.updateVor(allCrazyFlies)
         virtualResult = vor.virtualVor(allCrazyFlies)
 
-        waypoints = []
         for flie in vorResult:
-            # 找出对应Id储存在allcrazyfiles中的索引
-            [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == flie['Id']]
+            taskPool.put((flie, virtualResult))
 
-            # 找到对应Id的虚拟维诺划分
-            virtualFlie = [virtual for virtual in virtualResult if virtual['Id'] == flie['Id']][0]
+        # 等待所有的任务执行完毕
+        while True:
+            if all([not thread.busy for thread in threadList]):
+                break
 
-            # casadi运算下一步位置
-            outPut = cassingle.update(
-                flie['vertices'],
-                flie['centroid'],
-                virtualFlie['vertices'],
-                allCrazyFlies[matchIndex]['Position'],
-                allCrazyFlies[matchIndex]['Pose']
-            )
-
-            allCrazyFlies[matchIndex]['Position'] = [pos for pos in outPut[-1][0:2]]
-            allCrazyFlies[matchIndex]['Pose'] = round(outPut[-1][-1], 2)
-
+        waypoints = []
+        # 将线程结果绘画出来
+        for thread in threadList:
             draw and graph.updateTrack(
-                np.array(outPut),
-                allCrazyFlies[matchIndex]['Id']
-            )
-
-            for timeIndex, item in enumerate(outPut):
-                waypoints.append({
-                    'Id': allCrazyFlies[matchIndex]['Id'],
-                    'Px': item[0],
-                    'Py': item[1],
-                    'theta': item[2],
-                    'index': timeIndex
-                })
+                    thread.res[0],
+                    thread.res[1]
+                )
+            waypoints.append(thread.res[2])
 
         # 根据时间索引进行排序
         waypoints = sorted(waypoints, key = lambda i: i['index'])
@@ -141,6 +191,12 @@ def getWaypoint():
         # draw and graph.updateRidges(vorResult)
 
     print("consume: {}s to go through casadi".format(time.clock() - start))
+
+    # 关闭所有子线程
+    for thread in threadList:
+        thread.terminate()
+
+    print("all children threads closed.")
 
     return allWaypoints
 

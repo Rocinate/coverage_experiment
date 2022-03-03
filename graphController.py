@@ -17,11 +17,11 @@ class Graph:
             names['track_his' + Id] = [[], []]
         # 仅显示✈的label
         plt.legend()
-        for Id in IdList: 
+        for Id in IdList:
             names['ridges_handle' + Id], = plt.plot([], [], 'k-', label='ridges')
 
         self.centroids_handle, = plt.plot([], [], 'go', label='centriods')
-        
+
         # 规定画图范围
         ax.set_xlim([-xRange, xRange])
         ax.set_ylim([-yRange, yRange])
@@ -32,7 +32,7 @@ class Graph:
         exec("self.track_his{}[0].append(waypoints[:, 0].tolist())".format(Id))
         exec("self.track_his{}[1].append(waypoints[:, 1].tolist())".format(Id))
         exec("self.line{}.set_data(self.track_his{}[0], self.track_his{}[1])".format(
-            Id, Id, Id))  
+            Id, Id, Id))
         plt.pause(0.0001)
 
     # 更新维诺划分区域
