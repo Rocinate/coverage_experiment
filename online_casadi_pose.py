@@ -46,16 +46,16 @@ numIterations = 40
 xRange = 4.0
 yRange = 2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
-lineSpeed = 0.15
-angularSpeed = 0.6
+lineSpeed = 0.1
+angularSpeed = 0.25
 draw =  True# 是否画图
-T = 2.0
-N = 5
+T = 5.0
+N = 10
 allcfsTime = T/N
 volume = 0.05
 Z = 1.0 # 高度
 processNum = len(allCrazyFlies) # 线程数，默认和无人机个数相同
-calculTimeOut = 10 # 每轮运算超时设定
+calculTimeOut = 30 # 每轮运算超时设定
 
 class workers(Process):
     def __init__(self, q, name, res):
@@ -189,7 +189,7 @@ def getWaypoint():
             allCrazyFlies[matchIndex]['Pose'] = info['newPose']
             draw and graph.updateTrack(
                     info['track'],
-                    allCrazyFlies[matchIndex]['Id']
+                    info["Id"]
                 )
             waypoints += info['waypoints']
 
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         allWaypoints = pickle.load(f)
         f.close()
     else:
-        allwaypoints = getWaypoint()
+        allWaypoints = getWaypoint()
 
     # --record, 记录路径结果到本地txt文件，方便直接读取
     if args.record:
