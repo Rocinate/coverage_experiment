@@ -219,6 +219,7 @@ if __name__ == "__main__":
 
     # --load从本地文件直接读取路径结果
     if args.load:
+        import pickle
         f = open("text.txt", "rb")
         allWaypoints = pickle.load(f)
         f.close()
