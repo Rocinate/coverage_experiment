@@ -3,24 +3,24 @@ files:
   Pose: 0.0
   Position:
   - -1.4
-  - -1.5
+  - -1.0
 - Id: 2
   Pose: 0.0
   Position:
   - -0.7
-  - -1.5
+  - -1.0
 - Id: 3
   Pose: 0.0
   Position:
   - 0.0
-  - -1.5
+  - -1.0
 - Id: 4
   Pose: 0.0
   Position:
   - 0.7
-  - -1.5
+  - -1.0
 - Id: 5
   Pose: 0.0
   Position:
   - 1.4
-  - -1.5
+  - -1.0

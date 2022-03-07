@@ -15,7 +15,7 @@
 
 | file                                                 | part                                                         |
 | ---------------------------------------------------- | ------------------------------------------------------------ |
-| [online_map_sim.py](./online_map_sim.py)             | 演示程序，需要web界面配合                                    |
+| [online_map_sim.py](./online_map_sim.py)             | 演示程序，需要[web界面](http://45.115.245.21:8081/websocket/#/)配合 |
 | [online_casadi_pose.py](./online_casadi_pose.py)     | 多进程覆盖控制程序，--local本地模拟，--record记录路径到record.txt，--load从record.txt读取路径 |
 | [online_casadi_thread.py](./online_casadi_thread.py) | 多线程覆盖控制程序                                           |
 |                                                      |                                                              |

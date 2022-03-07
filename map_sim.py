@@ -6,6 +6,7 @@ import yaml
 import numpy as np
 import time
 import math
+from mapConvert import LocateMap
 from multiprocessing import Process, Queue
 
 # if python3
@@ -15,19 +16,6 @@ time.clock = time.time
 currentUrl = os.path.dirname(__file__)
 parentUrl = os.path.abspath(os.path.join(currentUrl, os.pardir))
 sys.path.append(parentUrl)
-
-# 模拟参数 --local仅本地画图模拟
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument("--local", help="Run using local simulation.", action="store_true")
-parser.add_argument("--record", help="save the waypoints.", action="store_true")
-parser.add_argument("--load", help="load waypoints from record.", action="store_true")
-args = parser.parse_args()
-
-if not args.local:
-    # 无人机接口
-    from pycrazyswarm import *
-    from CFController import CFController
 
 # 自定义库
 from borderdVoronoi import Vor
@@ -43,11 +31,11 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 numIterations = 25
-xRange = 3.0
+xRange = 2.8
 yRange = 2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
 lineSpeed = 0.1
-angularSpeed = 0.2
+angularSpeed = 0.25
 draw =  True# 是否画图
 T = 5.0
 N = 10
@@ -56,6 +44,10 @@ volume = 0.05
 Z = 1.0 # 高度
 processNum = len(allCrazyFlies) # 进程数，默认和无人机个数相同
 calculTimeOut = 30 # 每轮运算超时设定
+
+# 取石人公园和中医大省医院为范围
+latRange = (30.681858,  30.672805)
+lngRange = (104.036209, 104.047042)
 
 class workers(Process):
     def __init__(self, q, name, res):
@@ -137,7 +129,9 @@ def getWaypoint():
 
     vor = Vor(box, lineSpeed, angularSpeed)
 
-    cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, volume, method="objective")
+    cassingle = Cassingle(lineSpeed, angularSpeed, T, N, xRange, yRange, volume, method="objective", smooth_factor=1)
+
+    locateMap = LocateMap(xRange, yRange, lngRange, latRange)
 
     if draw:
         graph = Graph([str(cf['Id']) for cf in allCrazyFlies], xRange, yRange)
@@ -190,12 +184,19 @@ def getWaypoint():
                     info['track'],
                     info["Id"]
                 )
-            waypoints += info['waypoints']
 
-        # 根据时间索引进行排序
-        waypoints = sorted(waypoints, key = lambda i: i['index'])
+            waypoints.append({
+                'id': info["Id"],
+                'points': []
+            })
 
-        allWaypoints.append(waypoints)
+            for item in info["track"].tolist():
+                lng, lat = locateMap.xy2lnglat(item[0], item[1])
+                waypoints[len(waypoints) - 1]['points'].append({
+                    'position': item,
+                    'lng': lng,
+                    'lat': lat
+                })
 
         # 更新维诺质心
         draw and graph.updateCentroid(
@@ -207,6 +208,42 @@ def getWaypoint():
         draw and graph.updateRidges(virtualResult)
         # draw and graph.updateRidges(vorResult)
 
+        # 将虚拟边界转换为经纬度
+        for flie in waypoints:
+            [matchIndex] = [
+                index for (index, item) in enumerate(virtualResult) if item['Id'] == flie['id']
+            ]
+            flie['voronoiDiagram'] = []
+            flie['centroid'] = []
+            for vertice in virtualResult[matchIndex]['vertices']:
+                lng, lat = locateMap.xy2lnglat(vertice[0], vertice[1])
+                flie['voronoiDiagram'].append({
+                    'lng': lng,
+                    'lat': lat
+                })
+            centroid = virtualResult[matchIndex]['centroid']
+            lng, lat = locateMap.xy2lnglat(centroid[0], centroid[1])
+            flie['centroid'].append({
+                'lng': lng,
+                'lat': lat
+            })
+
+        # 计算loss
+        # virtualPosition = vor.virtualPosition(allCrazyFlies)
+        lossList = []
+        for i in range(len(waypoints[0]['points'])):
+            lossList.append(
+                cassingle.loss(np.array(
+                    [cf['points'][i]['position'][0:2] for cf in waypoints]
+                ))
+            )
+
+        waypoints.append({
+            "lossFunction": lossList
+        })
+
+        allWaypoints.append(waypoints)
+
     print("consume: {}s to go through casadi".format(time.clock() - start))
 
     print("all children process closed.")
@@ -214,32 +251,10 @@ def getWaypoint():
     return allWaypoints
 
 if __name__ == "__main__":
-    allWaypoints = []
+    allWaypoints = getWaypoint()
 
-    # --load从本地文件直接读取路径结果
-    if args.load:
-        import pickle
-        f = open("record.txt", "rb")
-        allWaypoints = pickle.load(f)
-        f.close()
-    else:
-        allWaypoints = getWaypoint()
-
-    # --record, 记录路径结果到本地txt文件，方便直接读取
-    if args.record:
-        import pickle
-        f = open("record.txt", "wb")
-        pickle.dump(allWaypoints, f)
-        f.close()
-
-    if not args.local:
-        cfController = CFController(allCrazyFlies, N, T, Z, lineSpeed)
-        print("casadi down, execute all waypoints")
-
-        cfController.startFlies()
-        for waypoints in allWaypoints:
-            # 实时飞行
-            cfController.goWaypoints(waypoints)
-
-        # 降落
-        cfController.goLand()
+    # 记录路径结果到本地txt文件，方便直接读取
+    import pickle
+    f = open("sim.txt", "wb")
+    pickle.dump(allWaypoints, f)
+    f.close()

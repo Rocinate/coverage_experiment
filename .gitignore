@@ -1,2 +1,5 @@
 *.pyc
+record.txt
+sim.txt
+origin.json
 __pycache__
