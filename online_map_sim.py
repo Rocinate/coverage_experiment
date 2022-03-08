@@ -233,9 +233,9 @@ def getWaypoint():
         lossList = []
         for i in range(len(waypoints[0]['points'])):
             lossList.append(
-                cassingle.loss(np.array(
+                (cassingle.loss(np.array(
                     [cf['points'][i]['position'][0:2] for cf in waypoints]
-                ))
+                ))-663)/33.3
             )
 
         waypoints.append({
