@@ -155,7 +155,7 @@ def getWaypoint():
     value = value[index]
 
     lambda_h[0] = value[1]
-    print(f"{1}时刻的连通度为{value[1]}")
+    print("1时刻的连通度为{}".format(value[1]))
     plt.show()
 
     for epoch in range(epochNum):
@@ -263,7 +263,7 @@ def getWaypoint():
             vectors = vectors[:, index]
             value = value[index]
 
-            print(f"{epoch + 1}时刻的连通度为{value[1]}")
+            print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
             lambda_h[epoch+1] = value[1]
 
             # 覆盖率计算
