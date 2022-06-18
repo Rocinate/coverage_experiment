@@ -12,7 +12,7 @@ import time
 import argparse
 
 # if python3
-time.clock = time.time
+# time.clock = time.time
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -29,7 +29,6 @@ args = parser.parse_args()
 if not args.local:
     # 无人机接口
     from pycrazyswarm import *
-    from utils.CFController import CFController
 
 # 自定义库
 from algorithms.LaplaMat import L_Mat
@@ -37,12 +36,12 @@ from algorithms.connect_preserve import con_pre
 from algorithms.ccangle import ccangle
 
 # 读取无人机位置配置
-# with open("online_simulation/crazyfiles.yaml", "r") as f:
-with open("crazyfiles.yaml", "r") as f:
+with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
+# with open("crazyfiles.yaml", "r") as f:
     data = yaml.load(f)
 allCrazyFlies = data['files']
 IdList = [item['Id'] for item in allCrazyFlies]
-positions = [item['Position'] for item in allCrazyFlies]
+positions = np.array([item['Position'] for item in allCrazyFlies])
 
 # 实验参数
 STOP = False
@@ -53,7 +52,7 @@ cov = 2/180*np.pi  # 单机覆盖角度
 
 # 参数设置
 R = 500  # 通信半径
-n = 20  # 无人机数量/batch
+n = len(allCrazyFlies)  # 无人机数量/batch
 batch = 1  # 批次
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
@@ -62,7 +61,6 @@ veAngle = np.zeros(n) # 无人机朝向角
 totalTime = 1200  # 仿真总时长
 dt = 1.  # 控制器更新频率
 epochNum = int(np.floor(totalTime / dt))
-np.random.seed(6)
 
 # 场地实际大小
 xRange = 3.0
@@ -79,11 +77,10 @@ def getWaypoint():
     allWaypoints = []
     
     print("start calculating!")
+    # 无人机初始角度
+    Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
 
     # if draw:
-    plt.rcParams["font.sans-serif"] = ["SimHei"]  # 设置字体
-    plt.rcParams["axes.unicode_minus"] = False  # 正常显示负号
-    
     intNum = 20  # 覆盖扇面插值数
     angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
     # 扇形点位，添加起点保证图像闭合
@@ -95,7 +92,7 @@ def getWaypoint():
     _, ax = plt.subplots()
     # 动态绘图
     plt.ion()
-    plt.title("无人机轨迹")
+    plt.title("UAVs track")
     plt.plot(xList, yList)
     plt.xlim((0, 21000))
     plt.ylim((0, 11000))
@@ -115,9 +112,6 @@ def getWaypoint():
             [circleX, circleY]
         ], fill=False)
         verHandle[index] = ax.add_patch(patch)
-
-    # 无人机初始角度
-    Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
 
     # 无人机位置，角度数据保存
     Px_h = np.zeros((n*batch, epochNum))
@@ -141,7 +135,7 @@ def getWaypoint():
     lambda_h = np.zeros(epochNum)
 
     activate = np.ones(n) # 判断无人机是否参与覆盖，参与赋值1，不参与复制0
-    time = 0
+    timeCount = 0
     timeCov = np.zeros(epochNum) # 储存t时刻覆盖率超过85%的概率
     coverage = np.zeros(epochNum)
 
@@ -269,20 +263,20 @@ def getWaypoint():
             # 覆盖率计算
             overlapping_angle = 0 # 覆盖重叠角度
             # 找到参与覆盖并且在覆盖角度中的agent，只选取在覆盖范围角度内的
-            angleSorted = sorted([Angle[index] for index, value in enumerate(activate) if value and Angle[index] > angleStart and Angle[index] < angleEnd])
+            angleSorted = sorted([Angle[idx] for idx, val in enumerate(activate) if val and Angle[idx] > angleStart and Angle[idx] < angleEnd])
             if len(angleSorted) == 0:
                 coverage[epoch] = 0
             else:
                 if angleSorted[0] - angleStart < cov / 2:
                     overlapping_angle += angleStart - angleSorted[0] + cov / 2
 
-                for index, angle in enumerate(angleSorted):
+                for idx, angle in enumerate(angleSorted):
                     # 跳过首个处理过的角度
-                    if index == 0:
+                    if idx == 0:
                         continue
 
-                    if angle - angleSorted[index - 1] < cov:
-                        overlapping_angle += angleSorted[index - 1] + cov - angle
+                    if angle - angleSorted[idx - 1] < cov:
+                        overlapping_angle += angleSorted[idx - 1] + cov - angle
 
                 # 处理尾部
                 if angleEnd - angleSorted[-1] < cov / 2:
@@ -291,30 +285,30 @@ def getWaypoint():
                 coverage[epoch] = (cov * len(angleSorted) - overlapping_angle) / (np.pi / 6)
 
             if coverage[epoch] >= 0.85:
-                time = time + 1
-                timeCov[epoch] = time / epoch
+                timeCount = timeCount + 1
+                timeCov[epoch] = timeCount / epoch
 
-            for index, angle in enumerate(Angle):
+            for idx, angle in enumerate(Angle):
                 if angle < angleEnd and angle > angleStart:
                     path = [
                         [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
                         [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
                         [circleX, circleY]
                     ]
-                    plt.setp(verHandle[index], xy=path)
+                    plt.setp(verHandle[idx], xy=path)
 
     _, ax2 = plt.subplots()
     plt.plot(lambda_h)
-    plt.title('代数连通度变化')
+    plt.title('connect rate')
 
     _, ax3 = plt.subplots()
     plt.plot(coverage)
-    plt.title('覆盖率变化')
+    plt.title('coverage rate')
 
 
     _, ax4 = plt.subplots()
     plt.plot(timeCov)
-    plt.title('时间覆盖率')
+    plt.title('time coverage') 
 
     # 防止绘图关闭
     plt.ioff()

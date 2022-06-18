@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+#!/usr/bin/env python
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
