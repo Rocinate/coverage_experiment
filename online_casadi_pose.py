@@ -7,6 +7,8 @@ import numpy as np
 import time
 import math
 from multiprocessing import Process, Queue
+import argparse
+import pickle
 
 # if python3
 time.clock = time.time
@@ -17,7 +19,6 @@ parentUrl = os.path.abspath(os.path.join(currentUrl, os.pardir))
 sys.path.append(parentUrl)
 
 # 模拟参数 --local仅本地画图模拟
-import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--local", help="Run using local simulation.", action="store_true")
 parser.add_argument("--record", help="save the waypoints.", action="store_true")
@@ -27,7 +28,7 @@ args = parser.parse_args()
 if not args.local:
     # 无人机接口
     from pycrazyswarm import *
-    from CFController import CFController
+    from utils.CFController import CFController
 
 # 自定义库
 from algorithms.borderdVoronoi import Vor
@@ -218,7 +219,6 @@ if __name__ == "__main__":
 
     # --load从本地文件直接读取路径结果
     if args.load:
-        import pickle
         f = open("record.txt", "rb")
         allWaypoints = pickle.load(f)
         f.close()
@@ -227,7 +227,6 @@ if __name__ == "__main__":
 
     # --record, 记录路径结果到本地txt文件，方便直接读取
     if args.record:
-        import pickle
         f = open("record.txt", "wb")
         pickle.dump(allWaypoints, f)
         f.close()
