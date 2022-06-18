@@ -45,21 +45,21 @@ positions = np.array([item['Position'] for item in allCrazyFlies])
 
 # 实验参数
 STOP = False
-r = 3000  # 雷达半径  #速度167m/s
-circleX, circleY = 21000, 5500  # 雷达中心
+r = 2.0 # 雷达半径 
+circleX, circleY = 4.5, 0  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 2/180*np.pi  # 单机覆盖角度
+cov = 4/180*np.pi  # 单机覆盖角度
 
 # 参数设置
-R = 500  # 通信半径
+R = 3.0  # 通信半径
 n = len(allCrazyFlies)  # 无人机数量/batch
 batch = 1  # 批次
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-vMax = 27.8  # 连通保持最大速度（用于限幅）
+vMax = 0.05  # 连通保持最大速度（用于限幅）
 veAngle = np.zeros(n) # 无人机朝向角
-totalTime = 1200  # 仿真总时长
-dt = 1.  # 控制器更新频率
+totalTime = 1000  # 仿真总时长
+dt = 0.5  # 控制器更新频率
 epochNum = int(np.floor(totalTime / dt))
 
 # 场地实际大小
@@ -68,7 +68,7 @@ yRange = 2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
 maxSpeed = 0.1
 draw =  True # 是否画图
-Z = 1.0 # 高度
+Z = 0.5 # 高度
 calculTimeOut = 30 # 每轮运算超时设定
 
 def getWaypoint():
@@ -94,8 +94,8 @@ def getWaypoint():
     plt.ion()
     plt.title("UAVs track")
     plt.plot(xList, yList)
-    plt.xlim((0, 21000))
-    plt.ylim((0, 11000))
+    plt.xlim((-2.5, 4.5))
+    plt.ylim((-3., 3.))
 
     plt.plot([1000, 1000], [0, 11000], linestyle='--',
         color='orange', linewidth=0.5)
@@ -154,7 +154,7 @@ def getWaypoint():
 
     for epoch in range(epochNum):
         # print(value)
-        if positions[:, 0].max() > 18000:
+        if positions[:, 0].max() > 2.5:
             break
         else:
             activate = np.ones(n)
@@ -181,9 +181,9 @@ def getWaypoint():
 
             # 判断无人机控制率是否改变，使无人机轨迹平滑
             # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-            changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.01
+            changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.0001
             ue_hx[changeIndex, epoch+1] = ue_hx[changeIndex, epoch]
-            changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.01
+            changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.0001
             ue_hy[changeIndex, epoch+1] = ue_hy[changeIndex, epoch]
 
             # 分段连通约束控制
@@ -201,7 +201,7 @@ def getWaypoint():
 
             # 总控制
             # u = 3 * uc + ue
-            u = 3 * uc + ue
+            u = ue
 
             # for agent in range(n):
             #     dist = np.linalg.norm(u[agent, :])
@@ -222,7 +222,7 @@ def getWaypoint():
             veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
 
             # 判断无人机是否执行覆盖任务
-            changeIndex = Px_h[:, epoch] <= 1000
+            changeIndex = Px_h[:, epoch] <= -2.5
             activate[changeIndex] = 0
             u_hx[changeIndex, epoch+1] = u_hx[changeIndex, epoch]
             u_hy[changeIndex, epoch+1] = u_hy[changeIndex, epoch]
@@ -333,7 +333,7 @@ if __name__ == '__main__':
         f.close()
 
     if not args.local:
-        framRate = 1.
+        framRate = 1.0 / dt
 
         print('Start flying!')
 

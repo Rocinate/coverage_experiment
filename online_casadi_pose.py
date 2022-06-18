@@ -54,7 +54,7 @@ T = 5.0
 N = 10
 allcfsTime = T/N
 volume = 0.05
-Z = 1.0 # 高度
+Z = .0 # 高度
 processNum = len(allCrazyFlies) # 进程数，默认和无人机个数相同
 calculTimeOut = 30 # 每轮运算超时设定
 
