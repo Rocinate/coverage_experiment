@@ -6,7 +6,7 @@ import yaml
 import numpy as np
 import time
 import math
-from mapConvert import LocateMap
+from algorithms.mapConvert import LocateMap
 from multiprocessing import Process, Queue
 
 # if python3
@@ -18,9 +18,9 @@ parentUrl = os.path.abspath(os.path.join(currentUrl, os.pardir))
 sys.path.append(parentUrl)
 
 # 自定义库
-from borderdVoronoi import Vor
-from cassingle import Cassingle
-from graphController import Graph
+from algorithms.borderdVoronoi import Vor
+from algorithms.cassingle import Cassingle
+from utils.graphController import Graph
 
 # 读取无人机位置配置
 # with open("online_simulation/crazyfiles.yaml", "r") as f:

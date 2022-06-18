@@ -30,9 +30,9 @@ if not args.local:
     from CFController import CFController
 
 # 自定义库
-from borderdVoronoi import Vor
-from cassingle import Cassingle
-from graphController import Graph
+from algorithms.borderdVoronoi import Vor
+from algorithms.cassingle import Cassingle
+from utils.graphController import Graph
 
 # 读取无人机位置配置
 # with open("online_simulation/crazyfiles.yaml", "r") as f:
