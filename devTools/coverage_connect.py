@@ -1,18 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from algorithms.LaplaMat import L_Mat
-from algorithms.connect_preserve import con_pre
-from algorithms.ccangle import ccangle
+import sys
+sys.path.append("./algorithms/")
+from LaplaMat import L_Mat
+from connect_preserve import con_pre
+from ccangle import ccangle
 
 plt.rcParams["font.sans-serif"] = ["SimHei"]  # 设置字体
 plt.rcParams["axes.unicode_minus"] = False  # 正常显示负号
 
 # 覆盖扇面作图
-r = 3000  # 雷达半径  #速度167m/s
-circleX, circleY = 21000, 5500  # 雷达中心
+r = 2.0  # 雷达半径  #速度167m/s
+circleX, circleY = 7.0, 0.5  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 2/180*np.pi  # 单机覆盖角度
+cov = 4/180*np.pi  # 单机覆盖角度
 
 intNum = 20  # 覆盖扇面插值数
 angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
@@ -28,20 +30,28 @@ _, ax = plt.subplots()
 plt.ion()
 plt.title("无人机轨迹")
 plt.plot(xList, yList)
-plt.xlim((0, 21000))
-plt.ylim((0, 11000))
+plt.xlim((-2.5, 7))
+plt.ylim((-3.0, 3))
 
-n = 20  # 无人机数量/batch
+n = 8  # 无人机数量/batch
 batch = 1  # 批次
 np.random.seed(6)  # 随机种子设定，保证可复现
 
-positions = np.random.rand(n * batch, 2) * 900
-positions[:, 1] += 5000
+positions = np.array([
+    [-2, -2.0],
+    [-2, -1.5],
+    [-2, 1.5],
+    [-2, 2.0],
+    [-1.5, -2.0],
+    [-1.5, -1.5],
+    [-1.5, 1.5],
+    [-1.5, 2.0]
+])
 
-plt.plot([1000, 1000], [0, 11000], linestyle='--',
-         color='orange', linewidth=0.5)
-plt.plot([18000, 18000], [0, 11000], linestyle='--',
-         color='orange', linewidth=0.5)
+# plt.plot([1000, 1000], [0, 11000], linestyle='--',
+#          color='orange', linewidth=0.5)
+# plt.plot([18000, 18000], [0, 11000], linestyle='--',
+#          color='orange', linewidth=0.5)
 
 # 无人机初始角度
 Angle = np.pi + \
@@ -62,13 +72,13 @@ for index in range(n * batch):
     verHandle[index] = ax.add_patch(patch)
 
 # 参数设置
-R = 500  # 通信半径
+R = 1.5  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-vMax = 27.8  # 连通保持最大速度（用于限幅）
+vMax = 0.1  # 连通保持最大速度（用于限幅）
 veAngle = np.zeros(n) # 无人机朝向角
-totalTime = 1200  # 仿真总时长
-dt = 1.  # 控制器更新频率
+totalTime = 1000  # 仿真总时长
+dt = 0.1  # 控制器更新频率
 epochNum = int(np.floor(totalTime / dt))
 
 # 无人机位置，角度数据保存
@@ -112,7 +122,7 @@ plt.show()
 
 for epoch in range(epochNum):
     # print(value)
-    if positions[:, 0].max() > 18000:
+    if positions[:, 0].max() > 2.5:
         break
     else:
         activate = np.ones(n)
@@ -139,9 +149,9 @@ for epoch in range(epochNum):
 
         # 判断无人机控制率是否改变，使无人机轨迹平滑
         # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-        changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.01
+        changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.0001
         ue_hx[changeIndex, epoch+1] = ue_hx[changeIndex, epoch]
-        changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.01
+        changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.0001
         ue_hy[changeIndex, epoch+1] = ue_hy[changeIndex, epoch]
 
         # 分段连通约束控制
@@ -152,14 +162,14 @@ for epoch in range(epochNum):
         # 限幅
         for agent in range(n):
             dist = np.linalg.norm(uc[agent, :])
-            if dist > vMax:
+            if dist > 0.01:
                 uc[agent, :] = vMax * uc[agent, :] / dist
         uc_hx[:, epoch+1] = uc[:, 0]
         uc_hy[:, epoch+1] = uc[:, 1]
 
         # 总控制
         # u = 3 * uc + ue
-        u = 3 * uc + ue
+        u = 0.1 * uc + ue
 
         # for agent in range(n):
         #     dist = np.linalg.norm(u[agent, :])
@@ -180,7 +190,7 @@ for epoch in range(epochNum):
         veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
 
         # 判断无人机是否执行覆盖任务
-        changeIndex = Px_h[:, epoch] <= 1000
+        changeIndex = Px_h[:, epoch] <= -2.5
         activate[changeIndex] = 0
         u_hx[changeIndex, epoch+1] = u_hx[changeIndex, epoch]
         u_hy[changeIndex, epoch+1] = u_hy[changeIndex, epoch]

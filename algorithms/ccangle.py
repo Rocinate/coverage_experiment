@@ -42,9 +42,12 @@ def ccangle(agentPos, angles, ueHisY, agentAngles, angleStart, angleEnd, radius,
             indexPos = np.where(angleList == angles[index])[0][0]
             bestAngle[index] = (angleList[indexPos - 1] + angleList[indexPos + 1]) / 2
     # 影响程度受距离的影响，距离雷达越近，通常的影响越小
-    beta = 1000.0
-    alpha = (0.05 - beta) * agentPos[:, 0] / 17100 + (beta * 181 -0.5)/171
-    alpha = np.ones(n) * 1.0
+    beta = 0.1
+    gamma = 0.01
+    gradient = (gamma - beta) / 4.5
+    intercept = (4 * gamma + 5 * beta) / 9
+    # alpha = (0.05 - beta) * agentPos[:, 0] / 17100 + (beta * 181 -0.5)/171
+    alpha = gradient * agentPos[:, 0] + intercept
     sameTrendIndex = ueHisY * (angles - bestAngle) >= 0
 
     ue[sameTrendIndex, 1] = ueHisY[sameTrendIndex] + alpha[sameTrendIndex] * (angles[sameTrendIndex] - bestAngle[sameTrendIndex])
@@ -57,20 +60,20 @@ def ccangle(agentPos, angles, ueHisY, agentAngles, angleStart, angleEnd, radius,
     # print(ue[:, 1])
 
     # 保证无人机相邻时刻转角的幅度在pi/6之内
-    angleChangeIndex = np.abs(np.arcsin(ue[:, 1]/vMax) - agentAngles) <= np.pi / 36
+    angleChangeIndex = np.abs(np.arcsin(ue[:, 1]/vMax) - agentAngles) <= np.pi / 18
     # 符合条件
     ue[angleChangeIndex, 0] = np.sqrt(vMax**2 - ue[angleChangeIndex, 1] ** 2)
     # 不符合条件
-    newAngle = agentAngles[~angleChangeIndex] + np.sign(angles[~angleChangeIndex] - bestAngle[~angleChangeIndex]) * np.pi / 36
+    newAngle = agentAngles[~angleChangeIndex] + np.sign(angles[~angleChangeIndex] - bestAngle[~angleChangeIndex]) * np.pi / 18
     ue[~angleChangeIndex, 0] = vMax * np.cos(newAngle)
     ue[~angleChangeIndex, 1] = vMax * np.sin(newAngle)
 
     # 保证无人机速度范围在-pi/3 ~ pi/3
-    lessIndex = np.arcsin(ue[:, 1] / vMax) < -np.pi / 3
-    largerIndex = np.arcsin(ue[:, 1] / vMax) > np.pi / 3
+    lessIndex = np.arcsin(ue[:, 1] / vMax) < -np.pi / 2.5
+    largerIndex = np.arcsin(ue[:, 1] / vMax) > np.pi / 2.5
 
-    ue[lessIndex, 0] = vMax * np.cos(-np.pi / 3)
-    ue[lessIndex, 1] = vMax * np.sin(-np.pi / 3)
-    ue[largerIndex, 0] = vMax * np.cos(np.pi / 3)
-    ue[largerIndex, 1] = vMax * np.sin(np.pi / 3)
+    ue[lessIndex, 0] = vMax * np.cos(-np.pi / 2.5)
+    ue[lessIndex, 1] = vMax * np.sin(-np.pi / 2.5)
+    ue[largerIndex, 0] = vMax * np.cos(np.pi / 2.5)
+    ue[largerIndex, 1] = vMax * np.sin(np.pi / 2.5)
     return ue
