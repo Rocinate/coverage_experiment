@@ -6,7 +6,7 @@ import yaml
 import numpy as np
 import time
 import math
-from algorithms.mapConvert import LocateMap
+from algorithms.cassingle_coverage.mapConvert import LocateMap
 from multiprocessing import Process, Queue
 
 # if python3
@@ -18,14 +18,14 @@ parentUrl = os.path.abspath(os.path.join(currentUrl, os.pardir))
 sys.path.append(parentUrl)
 
 # 自定义库
-from algorithms.borderdVoronoi import Vor
-from algorithms.cassingle import Cassingle
-from utils.graphController import Graph
+from algorithms.cassingle_coverage.borderdVoronoi import Vor
+from algorithms.cassingle_coverage.cassingle import Cassingle
+from algorithms.cassingle_coverage.graphController import Graph
 
 # 读取无人机位置配置
 # with open("online_simulation/crazyfiles.yaml", "r") as f:
 with open("crazyfiles.yaml", "r") as f:
-    data = yaml.load(f)
+    data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
 # 实验参数

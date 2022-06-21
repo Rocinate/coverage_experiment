@@ -48,10 +48,10 @@ positions = np.array([
     [-1.5, 2.0]
 ])
 
-# plt.plot([1000, 1000], [0, 11000], linestyle='--',
-#          color='orange', linewidth=0.5)
-# plt.plot([18000, 18000], [0, 11000], linestyle='--',
-#          color='orange', linewidth=0.5)
+plt.plot([1000, 1000], [0, 11000], linestyle='--',
+         color='orange', linewidth=0.5)
+plt.plot([18000, 18000], [0, 11000], linestyle='--',
+         color='orange', linewidth=0.5)
 
 # 无人机初始角度
 Angle = np.pi + \
@@ -168,7 +168,6 @@ for epoch in range(epochNum):
         uc_hy[:, epoch+1] = uc[:, 1]
 
         # 总控制
-        # u = 3 * uc + ue
         u = 0.1 * uc + ue
 
         # for agent in range(n):

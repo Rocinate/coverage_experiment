@@ -32,9 +32,7 @@ if not args.local:
     from pycrazyswarm import *
 
 # 自定义库
-from algorithms.connect_coverage.LaplaMat import L_Mat
-from algorithms.connect_coverage.connect_preserve import con_pre
-from algorithms.connect_coverage.ccangle import ccangle
+from algorithms.connect_coverage.controller import Controller
 
 # 读取无人机位置配置
 # with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
@@ -71,12 +69,15 @@ class workers(Process):
         Process.__init__(self)
         self.res = res
         self.name = name
+        self.controller = Controller()
     
     def run(self):
         print("start calculating!")
         try:
-            # 无人机初始角度
             Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
+            u = self.controller.get_control_rate()
+            
+            # 无人机初始角度
             # 无人机位置，角度数据保存
             Px_h = np.zeros((n*batch, epochNum))
             Py_h = np.zeros((n*batch, epochNum))
