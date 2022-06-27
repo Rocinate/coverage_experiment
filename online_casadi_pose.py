@@ -5,7 +5,6 @@ import os
 import yaml
 import numpy as np
 import time
-import math
 from multiprocessing import Process, Queue
 import argparse
 import pickle
@@ -28,17 +27,17 @@ args = parser.parse_args()
 if not args.local:
     # 无人机接口
     from pycrazyswarm import *
-    from utils.CFController import CFController
+    from algorithms.cassingle_coverage.CFController import CFController
 
 # 自定义库
-from algorithms.borderdVoronoi import Vor
-from algorithms.cassingle import Cassingle
-from utils.graphController import Graph
+from algorithms.cassingle_coverage.borderdVoronoi import Vor
+from algorithms.cassingle_coverage.cassingle import Cassingle
+from algorithms.cassingle_coverage.graphController import Graph
 
 # 读取无人机位置配置
 # with open("online_simulation/crazyfiles.yaml", "r") as f:
 with open("crazyfiles.yaml", "r") as f:
-    data = yaml.load(f)
+    data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
 # 实验参数

@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
-from random import random
 from scipy.spatial.transform import Rotation
 import sys
 import os
@@ -12,12 +11,9 @@ import matplotlib.patches as patches
 import time
 import argparse
 from multiprocessing import Process, Queue
-import random
-import copy
-
 
 # if python3
-# time.clock = time.time
+time.clock = time.time
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -35,16 +31,12 @@ if not args.local:
     # 无人机接口
     from pycrazyswarm import *
 
-
 # 自定义库
-from algorithms.connect_coverage.LaplaMat import L_Mat
-from algorithms.connect_coverage.connect_preserve import con_pre
-from algorithms.connect_coverage.ccangle import ccangle
-
+from algorithms.connect_coverage.controller import Controller
 
 # 读取无人机位置配置
-with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
-# with open("crazyfiles.yaml", "r") as f:
+# with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
+with open("crazyfiles.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 IdList = [item['Id'] for item in allCrazyFlies]
@@ -53,7 +45,7 @@ positions = np.array([item['Position'] for item in allCrazyFlies])
 # 实验参数
 STOP = False
 r = 2.0 # 雷达半径 
-circleX, circleY = 8.0, 0.5  # 雷达中心
+circleX, circleY = 7.0, 0.5  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
 cov = 4/180*np.pi  # 单机覆盖角度
 
@@ -61,12 +53,9 @@ cov = 4/180*np.pi  # 单机覆盖角度
 R = 1.5  # 通信半径
 n = len(allCrazyFlies)  # 无人机数量/batch
 batch = 1  # 批次
-Remindid = [2,3,4]
-UavDropTime = 100
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-vMax = 0.2  # 连通保持最大速度（用于限幅）
-vc_Max =  0.01 # connect speed limit
+vMax = 0.1  # 连通保持最大速度（用于限幅）
 veAngle = np.zeros(n) # 无人机朝向角
 totalTime = 1000  # 仿真总时长
 dt = 0.1  # 控制器更新频率
@@ -80,14 +69,15 @@ class workers(Process):
         Process.__init__(self)
         self.res = res
         self.name = name
+        self.controller = Controller()
     
     def run(self):
         print("start calculating!")
-        global positions
         try:
-            # 无人机初始角度
-            print('1')
             Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
+            u = self.controller.get_control_rate()
+            
+            # 无人机初始角度
             # 无人机位置，角度数据保存
             Px_h = np.zeros((n*batch, epochNum))
             Py_h = np.zeros((n*batch, epochNum))
@@ -129,202 +119,89 @@ class workers(Process):
                 if positions[:, 0].max() > 2.5:
                     break
                 else:
+                    activate = np.ones(n)
                     # 角度覆盖控制率
-                    if(epoch>UavDropTime):
-                        activate = np.ones(n-len(Remindid))
-                        if(epoch==UavDropTime+1):
-                            positions = np.delete(positions,Remindid,axis=0)
-                            ue_hy = np.delete(ue_hy,Remindid,axis=0)
-                            ue_hx = np.delete(ue_hx,Remindid,axis=0)
+                    ue = ccangle(
+                        positions,
+                        Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
+                        angleStart, angleEnd, R, vMax, cov)
+                    # print(ue)
+                    # break
+                    ue_hx[:, epoch + 1] = ue[:, 0]
+                    ue_hy[:, epoch + 1] = ue[:, 1]
 
-                            uc_hx = np.delete(uc_hx,Remindid,axis=0)
-                            uc_hy = np.delete(uc_hy,Remindid,axis=0)
-                            u_hx = np.delete(u_hx,Remindid,axis=0)
-                            u_hy = np.delete(u_hy,Remindid,axis=0)
-                            Px_h = np.delete(Px_h,Remindid,axis=0)
-                            Py_h = np.delete(Py_h,Remindid,axis=0)
+                    # 判断无人机控制率是否改变，使无人机轨迹平滑
+                    changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.0001
+                    ue_hx[changeIndex, epoch+1] = ue_hx[changeIndex, epoch]
+                    changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.0001
+                    ue_hy[changeIndex, epoch+1] = ue_hy[changeIndex, epoch]
 
-                            Angle_h =  np.delete(Angle_h,Remindid,axis=0)
-                            veAngle_h =  np.delete(veAngle_h,Remindid,axis=0)
-                            d = np.delete(d, Remindid, axis=0)
-                            d = np.delete(d, Remindid, axis=1)
-                            A = np.delete(A, Remindid, axis=0)
+                    # 分段连通约束控制
+                    features  = np.ones(n) * value[1]
+                    featureVec = vectors[:, 1]
+
+                    uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
+                    # 限幅
+                    for agent in range(n):
+                        dist = np.linalg.norm(uc[agent, :])
+                        if dist > vMax:
+                            uc[agent, :] = vMax * uc[agent, :] / dist
+                    uc_hx[:, epoch+1] = uc[:, 0]
+                    uc_hy[:, epoch+1] = uc[:, 1]
+
+                    # 总控制
+                    # u = 3 * uc + ue
+                    u = ue
+
+                    for agent in range(n):
+                        dist = np.linalg.norm(u[agent, :])
+                        if dist > vMax:
+                            u[agent, :] = vMax * u[agent, :] / dist
+
+                    # 控制率叠加
+                    u_hx[:, epoch + 1] = u[:, 0]
+                    u_hy[:, epoch + 1] = u[:, 1]
+                    Px_h[:, epoch + 1] = Px_h[:, epoch] + u[:, 0] * dt
+                    Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
+                    Angle_h[:, epoch + 1] = np.pi + np.arctan((circleY - Py_h[:, epoch+1]) / (circleX - Px_h[:, epoch + 1]))
+                    Angle = Angle_h[:, epoch + 1]
+                    veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
+
+                    # 判断无人机是否执行覆盖任务
+                    changeIndex = Px_h[:, epoch] <= -2.5
+                    activate[changeIndex] = 0
+                    u_hx[changeIndex, epoch+1] = u_hx[changeIndex, epoch]
+                    u_hy[changeIndex, epoch+1] = u_hy[changeIndex, epoch]
+                    Px_h[changeIndex, epoch+1] = Px_h[changeIndex, epoch] + u_hx[changeIndex, epoch+1]*dt
+                    Py_h[changeIndex, epoch+1] = Py_h[changeIndex, epoch] + u_hy[changeIndex, epoch+1]*dt
+                    Angle_h[changeIndex, epoch+1] = np.pi + np.arctan((circleY - Py_h[changeIndex, epoch+1]) / (circleX - Px_h[changeIndex, epoch + 1]))
+                    Angle[changeIndex] = Angle_h[changeIndex, epoch+1]
+                    veAngle_h[changeIndex, epoch+1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
 
 
-                        ue = ccangle(
-                            positions,
-                            Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
-                            angleStart, angleEnd, R, vMax, cov
-                        )
-                        # print(ue)
-                        # break
-                        ue_hx[:, epoch + 1] = ue[:, 0]
-                        ue_hy[:, epoch + 1] = ue[:, 1]
+                    # 更新位置
+                    positions[:, 0] = Px_h[:, epoch + 1]
+                    positions[:, 1] = Py_h[:, epoch + 1]
 
-                        # 判断无人机控制率是否改变，使无人机轨迹平滑
-                        # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-                        changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
-                        ue_hx[changeIndex, epoch + 1] = ue_hx[changeIndex, epoch]
-                        changeIndex = np.abs(ue_hy[:, epoch + 1] - ue_hy[:, epoch]) < 0.0001
-                        ue_hy[changeIndex, epoch + 1] = ue_hy[changeIndex, epoch]
-                        features = np.ones(n - len(Remindid)) * value[1]
-                        featureVec = vectors[:, 1]
-                        # d = np.delete(d, Remindid, axis=0)
-                        # d = np.delete(d,Remindid,axis=1)
-                        # A = np.delete(A, Remindid, axis=0)
-                        uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
-                        # 限幅
-                        for agent in range(n - len(Remindid)):
-                            dist = np.linalg.norm(uc[agent, :])
-                            if dist > vc_Max:
-                                uc[agent, :] = vc_Max * uc[agent, :] / dist
-                        uc_hx[:, epoch + 1] = uc[:, 0]
-                        uc_hy[:, epoch + 1] = uc[:, 1]
+                    for k in range(n*batch):
+                        Px, Py = positions[k, :]
+                        self.res.put({
+                            "Px": Px,
+                            "Py": Py,
+                            "Id": IdList[k],
+                            "theta": veAngle,
+                            "index": epoch,
+                            "ux": u_hx[k, epoch + 1],
+                            "uy": u_hy[k, epoch + 1]
+                        })
 
-                        # 总控制
-                        # u = 3 * uc + ue
-                        u = 0.3 * uc + ue
-                        # 控制率叠加
-                        u_hx[:, epoch + 1] = u[:, 0]
-                        u_hy[:, epoch + 1] = u[:, 1]
-                        Px_h[:, epoch + 1] = Px_h[:, epoch] + u[:, 0] * dt
-                        Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
-                        Angle_h[:, epoch + 1] = np.pi + np.arctan(
-                            (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
-                        Angle = Angle_h[:, epoch + 1]
-
-                        changeIndex = u_hy[:, epoch + 1] > vMax
-                        u_hy[changeIndex, epoch + 1] = vMax
-
-                        veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
-
-                        # 判断无人机是否执行覆盖任务
-                        changeIndex = Px_h[:, epoch] <= -2.5
-                        activate[changeIndex] = 0
-                        u_hx[changeIndex, epoch + 1] = u_hx[changeIndex, epoch]
-                        u_hy[changeIndex, epoch + 1] = u_hy[changeIndex, epoch]
-                        Px_h[changeIndex, epoch + 1] = Px_h[changeIndex, epoch] + u_hx[changeIndex, epoch + 1] * dt
-                        Py_h[changeIndex, epoch + 1] = Py_h[changeIndex, epoch] + u_hy[changeIndex, epoch + 1] * dt
-                        Angle_h[changeIndex, epoch + 1] = np.pi + np.arctan(
-                            (circleY - Py_h[changeIndex, epoch + 1]) / (circleX - Px_h[changeIndex, epoch + 1]))
-                        Angle[changeIndex] = Angle_h[changeIndex, epoch + 1]
-                        veAngle_h[changeIndex, epoch + 1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
-                        #更新位置
-                        positions[:, 0] = Px_h[:, epoch + 1]
-                        positions[:, 1] = Py_h[:, epoch + 1]
-                        #positions = np.insert(positions, Remindid, tempx, axis=0)
-                        temp_pos =  copy.deepcopy(positions)
-                        temp_uhx = copy.deepcopy(u_hx)
-                        temp_uhy = copy.deepcopy(u_hy)
-                        for i in range(len(Remindid)):
-                            temp_pos = np.insert(temp_pos,Remindid[i],np.array([tempx[i],tempy[i]]),axis=0)
-                            temp_uhx = np.insert(temp_uhx,Remindid[i],np.array([tempuhx]),axis=0)
-                            temp_uhy = np.insert(temp_uhy,Remindid[i],np.array([tempuhy]),axis=0)
-                        
-                        for k in range(n*batch):
-                            Px, Py = temp_pos[k, :]
-                            self.res.put({
-                                "Px": Px,
-                                "Py": Py,
-                                "Id": IdList[k],
-                                "theta": veAngle,
-                                "index": epoch,
-                                "ux": u_hx[k, epoch + 1],
-                                "uy": u_hy[k, epoch + 1]
-                            })
-
-                        # 计算下一时刻的连通度
-                        L, A, d = L_Mat(positions, R, delta)
-                        value, vectors = np.linalg.eig(L)
-                        # 从小到大对特征值进行排序
-                        index = np.argsort(value)
-                        vectors = vectors[:, index]
-                        value = value[index]
-
-                    else:
-                        activate = np.ones(n)
-                        ue = ccangle(
-                            positions,
-                            Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
-                            angleStart, angleEnd, R, vMax, cov)
-                        # print(ue)
-                        # break
-                        ue_hx[:, epoch + 1] = ue[:, 0]
-                        ue_hy[:, epoch + 1] = ue[:, 1]
-
-                        # 判断无人机控制率是否改变，使无人机轨迹平滑
-                        # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-                        changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
-                        ue_hx[changeIndex, epoch + 1] = ue_hx[changeIndex, epoch]
-                        changeIndex = np.abs(ue_hy[:, epoch + 1] - ue_hy[:, epoch]) < 0.0001
-                        ue_hy[changeIndex, epoch + 1] = ue_hy[changeIndex, epoch]
-                        #分段控制
-                        features = np.ones(n) * value[1]
-                        featureVec = vectors[:, 1]
-                        uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
-                        # 限幅
-                        for agent in range(n):
-                            dist = np.linalg.norm(uc[agent, :])
-                            if dist > vc_Max:
-                                uc[agent, :] = vc_Max * uc[agent, :] / dist
-                        uc_hx[:, epoch + 1] = uc[:, 0]
-                        uc_hy[:, epoch + 1] = uc[:, 1]
-
-                        # 总控制
-                        # u = 3 * uc + ue
-                        u = 0.3 * uc + ue
-
-                        # 控制率叠加
-                        u_hx[:, epoch + 1] = u[:, 0]
-                        u_hy[:, epoch + 1] = u[:, 1]
-                        Px_h[:, epoch + 1] = Px_h[:, epoch] + u[:, 0] * dt
-                        Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
-                        Angle_h[:, epoch + 1] = np.pi + np.arctan(
-                            (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
-                        Angle = Angle_h[:, epoch + 1]
-
-                        changeIndex = u_hy[:, epoch + 1] > vMax
-                        u_hy[changeIndex, epoch + 1] = vMax
-
-                        veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
-                        # 判断无人机是否执行覆盖任务
-                        changeIndex = Px_h[:, epoch] <= -2.5
-                        activate[changeIndex] = 0
-                        u_hx[changeIndex, epoch + 1] = u_hx[changeIndex, epoch]
-                        u_hy[changeIndex, epoch + 1] = u_hy[changeIndex, epoch]
-                        Px_h[changeIndex, epoch + 1] = Px_h[changeIndex, epoch] + u_hx[changeIndex, epoch + 1] * dt
-                        Py_h[changeIndex, epoch + 1] = Py_h[changeIndex, epoch] + u_hy[changeIndex, epoch + 1] * dt
-                        Angle_h[changeIndex, epoch + 1] = np.pi + np.arctan(
-                            (circleY - Py_h[changeIndex, epoch + 1]) / (circleX - Px_h[changeIndex, epoch + 1]))
-                        Angle[changeIndex] = Angle_h[changeIndex, epoch + 1]
-                        veAngle_h[changeIndex, epoch + 1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
-                        #更新位置
-                        positions[:, 0] = Px_h[:, epoch + 1]
-                        positions[:, 1] = Py_h[:, epoch + 1]
-                        for k in range(n*batch):
-                            Px, Py = positions[k, :]
-                            self.res.put({
-                                "Px": Px,
-                                "Py": Py,
-                                "Id": IdList[k],
-                                "theta": veAngle,
-                                "index": epoch,
-                                "ux": u_hx[k, epoch + 1],
-                                "uy": u_hy[k, epoch + 1]
-                            })
-                            
-                        if(epoch==UavDropTime):
-                            tempuhx = u_hx[Remindid,:]
-                            tempuhy = u_hy[Remindid,:]
-                            tempx = positions[Remindid, 0]
-                            tempy = positions[Remindid, 1]
-                        # 计算下一时刻的连通度
-                        L, A, d = L_Mat(positions, R, delta)
-                        value, vectors = np.linalg.eig(L)
-                        # 从小到大对特征值进行排序
-                        index = np.argsort(value)
-                        vectors = vectors[:, index]
-                        value = value[index]
+                    # 计算下一时刻的连通度
+                    L, A, d = L_Mat(positions, R, delta)
+                    value, vectors = np.linalg.eig(L)
+                    # 从小到大对特征值进行排序
+                    index = np.argsort(value)
+                    vectors = vectors[:, index]
+                    value = value[index]
 
                     print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
                     lambda_h[epoch+1] = value[1]
@@ -429,7 +306,6 @@ def getWaypoint():
                 positions,
                 Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
                 angleStart, angleEnd, R, vMax, cov)
-
             # print(ue)
             # break
             ue_hx[:, epoch + 1] = ue[:, 0]
@@ -489,7 +365,7 @@ def getWaypoint():
             veAngle_h[changeIndex, epoch+1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
 
 
-            # 更新位置cov
+            # 更新位置
             positions[:, 0] = Px_h[:, epoch + 1]
             positions[:, 1] = Py_h[:, epoch + 1]
 
@@ -617,12 +493,13 @@ if __name__ == '__main__':
 
         while not resultStorage.empty():
             waypoint = resultStorage.get()
+            
             # 取出实际位置和速度
             vx = waypoint['ux']
             vy = waypoint['uy']
             desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
 
-            # 获取对应ID的无人机控制器实例positions
+            # 获取对应ID的无人机控制器实例
             cf = allcfsDict[waypoint['Id']]
 
             actualPosition = cf.position()
