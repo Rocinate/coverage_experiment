@@ -1,18 +1,19 @@
+# -*- coding: UTF-8 -*-
+#!/usr/bin/env python
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import sys
+
+#from scripts.online_simulation_dev.online_coverage_connect import DropTime
 sys.path.append("./algorithms/")
 from LaplaMat import L_Mat
 from connect_preserve import con_pre
 from ccangle import ccangle
 
-plt.rcParams["font.sans-serif"] = ["SimHei"]  # 设置字体
-plt.rcParams["axes.unicode_minus"] = False  # 正常显示负号
-
 # 覆盖扇面作图
 r = 2.0  # 雷达半径  #速度167m/s
-circleX, circleY = 7.0, 0.5  # 雷达中心
+circleX, circleY = 8.0, 0.5  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
 cov = 4/180*np.pi  # 单机覆盖角度
 
@@ -28,7 +29,7 @@ yList = [circleY] + [circleY + r *
 _, ax = plt.subplots()
 # 动态绘图
 plt.ion()
-plt.title("无人机轨迹")
+plt.title("UVA tracker")
 plt.plot(xList, yList)
 plt.xlim((-2.5, 7))
 plt.ylim((-3.0, 3))
@@ -38,12 +39,12 @@ batch = 1  # 批次
 np.random.seed(6)  # 随机种子设定，保证可复现
 
 positions = np.array([
-    [-2, -2.0],
-    [-2, -1.5],
+    [-2, -1.0],
+    [-2, -0.5],
     [-2, 1.5],
     [-2, 2.0],
-    [-1.5, -2.0],
-    [-1.5, -1.5],
+    [-1.5, -1.1],
+    [-1.5, -0.5],
     [-1.5, 1.5],
     [-1.5, 2.0]
 ])
@@ -74,8 +75,12 @@ for index in range(n * batch):
 # 参数设置
 R = 1.5  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
+Remindid = [1,2]
+UavDropTime = 10
+
 epsilon = 0.1  # 最小代数连通度
-vMax = 0.1  # 连通保持最大速度（用于限幅）
+vMax = 0.2 # 连通保持最大速度（用于限幅）
+vc_Max = 0.1 #connect speed limite
 veAngle = np.zeros(n) # 无人机朝向角
 totalTime = 1000  # 仿真总时长
 dt = 0.1  # 控制器更新频率
@@ -137,11 +142,25 @@ for epoch in range(epochNum):
         agentHandle.set_offsets(positions)
         plt.pause(0.00001)
         # ti.sleep(0.5)
+     
         # 角度覆盖控制率
-        ue = ccangle(
-            positions,
-            Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
-            angleStart, angleEnd, R, vMax, cov)
+        if(epoch>UavDropTime):
+                positions = np.delete(positions,Remindid,axis=0)
+                ue_hy = np.delete(ue_hy,Remindid,axis=0)
+                ue_hx = np.delete(ue_hx,Remindid,axis=0)
+                
+                Angle_h =  np.delete(Angle_h,Remindid,axis=0)
+                veAngle_h =  np.delete(veAngle_h,Remindid,axis=0)
+                ue = ccangle(
+                     positions,
+                     Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
+                     angleStart, angleEnd, R, vMax, cov
+                )
+        else:
+                ue = ccangle(
+                    positions,
+                    Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
+                    angleStart, angleEnd, R, vMax, cov)
         # print(ue)
         # break
         ue_hx[:, epoch + 1] = ue[:, 0]
@@ -155,30 +174,36 @@ for epoch in range(epochNum):
         ue_hy[changeIndex, epoch+1] = ue_hy[changeIndex, epoch]
 
         # 分段连通约束控制
-        features  = np.ones(n) * value[1]
-        featureVec = vectors[:, 1]
+        if(epoch>UavDropTime):
+            features  = np.ones(n-len(Remindid)) * value[1]
+            featureVec = vectors[:, 1]
+        else:
+             features  = np.ones(n) * value[1]
+             featureVec = vectors[:, 1]
 
         uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
         # 限幅
         for agent in range(n):
             dist = np.linalg.norm(uc[agent, :])
-            if dist > 0.01:
-                uc[agent, :] = vMax * uc[agent, :] / dist
+            if dist > vc_Max:
+                uc[agent, :] = vc_Max * uc[agent, :] / dist
         uc_hx[:, epoch+1] = uc[:, 0]
         uc_hy[:, epoch+1] = uc[:, 1]
 
         # 总控制
         # u = 3 * uc + ue
-        u = 0.1 * uc + ue
+        u = 0.3* uc + ue
 
         # for agent in range(n):
         #     dist = np.linalg.norm(u[agent, :])
         #     if dist > vMax:
         #         u[agent, :] = vMax * u[agent, :] / dist
-        for agent in range(n):
-            dist = np.linalg.norm(u[agent, :])
-            if dist > vMax:
-                u[agent, :] = vMax * u[agent, :] / dist
+        
+        # for agent in range(n):
+        #     dist = np.linalg.norm(u[agent, :])
+        #     if dist > vMax:
+        #         u[agent, :] = vMax * u[agent, :] / dist
+
 
         # 控制率叠加
         u_hx[:, epoch + 1] = u[:, 0]
@@ -187,6 +212,10 @@ for epoch in range(epochNum):
         Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
         Angle_h[:, epoch + 1] = np.pi + np.arctan((circleY - Py_h[:, epoch+1]) / (circleX - Px_h[:, epoch + 1]))
         Angle = Angle_h[:, epoch + 1]
+
+        changeIndex = u_hy[:,epoch+1]>vMax
+        u_hy[changeIndex,epoch+1] = vMax
+            
         veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
 
         # 判断无人机是否执行覆盖任务
@@ -202,8 +231,16 @@ for epoch in range(epochNum):
 
 
         # 更新位置
-        positions[:, 0] = Px_h[:, epoch + 1]
-        positions[:, 1] = Py_h[:, epoch + 1]
+        if(epoch>UavDropTime):
+                positions[:, 0] = Px_h[:, epoch + 1]
+                positions[:, 1] = Py_h[:, epoch + 1]
+                positions = np.insert(positions,Remindid,tempx,axis=0)
+                
+        else:
+                positions[:, 0] = Px_h[:, epoch + 1]
+                positions[:, 1] = Py_h[:, epoch + 1]
+                tempx = positions[Remindid,0]
+                tempy = positions[Remindid,1]
         # 计算下一时刻的连通度
         L, A, d = L_Mat(positions, R, delta)
         value, vectors = np.linalg.eig(L)
@@ -218,7 +255,7 @@ for epoch in range(epochNum):
         # 覆盖率计算
         overlapping_angle = 0 # 覆盖重叠角度
         # 找到参与覆盖并且在覆盖角度中的agent，只选取在覆盖范围角度内的
-        angleSorted = sorted([Angle[index] for index, value in enumerate(activate) if value and Angle[index] > angleStart and Angle[index] < angleEnd])
+        angleSorted = sorted([Angle[index] for index, val in enumerate(activate) if val and Angle[index] > angleStart and Angle[index] < angleEnd])
         if len(angleSorted) == 0:
             coverage[epoch] = 0
         else:
@@ -254,16 +291,16 @@ for epoch in range(epochNum):
 
 _, ax2 = plt.subplots()
 plt.plot(lambda_h)
-plt.title('代数连通度变化')
+plt.title('connect')
 
 _, ax3 = plt.subplots()
 plt.plot(coverage)
-plt.title('覆盖率变化')
+plt.title('coverage')
 
 
 _, ax4 = plt.subplots()
 plt.plot(timeCov)
-plt.title('时间覆盖率')
+plt.title('time-coverage')
 
 # 防止绘图关闭
 plt.ioff()

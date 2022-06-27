@@ -15,7 +15,6 @@ from multiprocessing import Process, Queue
 import random
 import copy
 
-
 # if python3
 # time.clock = time.time
 
@@ -35,12 +34,10 @@ if not args.local:
     # 无人机接口
     from pycrazyswarm import *
 
-
 # 自定义库
 from algorithms.LaplaMat import L_Mat
 from algorithms.connect_preserve import con_pre
 from algorithms.ccangle import ccangle
-
 
 # 读取无人机位置配置
 with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
@@ -49,6 +46,7 @@ with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
 allCrazyFlies = data['files']
 IdList = [item['Id'] for item in allCrazyFlies]
 positions = np.array([item['Position'] for item in allCrazyFlies])
+print(positions)
 
 # 实验参数
 STOP = False
@@ -86,7 +84,6 @@ class workers(Process):
         global positions
         try:
             # 无人机初始角度
-            print('1')
             Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
             # 无人机位置，角度数据保存
             Px_h = np.zeros((n*batch, epochNum))
@@ -129,7 +126,6 @@ class workers(Process):
                 if positions[:, 0].max() > 2.5:
                     break
                 else:
-                    # 角度覆盖控制率
                     if(epoch>UavDropTime):
                         activate = np.ones(n-len(Remindid))
                         if(epoch==UavDropTime+1):
@@ -149,8 +145,6 @@ class workers(Process):
                             d = np.delete(d, Remindid, axis=0)
                             d = np.delete(d, Remindid, axis=1)
                             A = np.delete(A, Remindid, axis=0)
-
-
                         ue = ccangle(
                             positions,
                             Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
@@ -160,8 +154,7 @@ class workers(Process):
                         # break
                         ue_hx[:, epoch + 1] = ue[:, 0]
                         ue_hy[:, epoch + 1] = ue[:, 1]
-
-                        # 判断无人机控制率是否改变，使无人机轨迹平滑
+                          # 判断无人机控制率是否改变，使无人机轨迹平滑
                         # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
                         changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
                         ue_hx[changeIndex, epoch + 1] = ue_hx[changeIndex, epoch]
@@ -169,18 +162,23 @@ class workers(Process):
                         ue_hy[changeIndex, epoch + 1] = ue_hy[changeIndex, epoch]
                         features = np.ones(n - len(Remindid)) * value[1]
                         featureVec = vectors[:, 1]
-                        # d = np.delete(d, Remindid, axis=0)
-                        # d = np.delete(d,Remindid,axis=1)
-                        # A = np.delete(A, Remindid, axis=0)
+
+                        # 判断无人机控制率是否改变，使无人机轨迹平滑
+                        changeIndex = np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]) < 0.0001
+                        ue_hx[changeIndex, epoch+1] = ue_hx[changeIndex, epoch]
+                        changeIndex = np.abs(ue_hy[:, epoch+1] - ue_hy[:,epoch]) < 0.0001
+                        ue_hy[changeIndex, epoch+1] = ue_hy[changeIndex, epoch]
                         uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
-                        # 限幅
+                            # 限幅
                         for agent in range(n - len(Remindid)):
-                            dist = np.linalg.norm(uc[agent, :])
-                            if dist > vc_Max:
-                                uc[agent, :] = vc_Max * uc[agent, :] / dist
+                                dist = np.linalg.norm(uc[agent, :])
+                                if dist > vc_Max:
+                                    uc[agent, :] = vc_Max * uc[agent, :] / dist
                         uc_hx[:, epoch + 1] = uc[:, 0]
                         uc_hy[:, epoch + 1] = uc[:, 1]
-
+                        # 分段连通约束控制
+                        features  = np.ones(n) * value[1]
+                        featureVec = vectors[:, 1]
                         # 总控制
                         # u = 3 * uc + ue
                         u = 0.3 * uc + ue
@@ -192,7 +190,6 @@ class workers(Process):
                         Angle_h[:, epoch + 1] = np.pi + np.arctan(
                             (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
                         Angle = Angle_h[:, epoch + 1]
-
                         changeIndex = u_hy[:, epoch + 1] > vMax
                         u_hy[changeIndex, epoch + 1] = vMax
 
@@ -217,10 +214,9 @@ class workers(Process):
                         temp_uhx = copy.deepcopy(u_hx)
                         temp_uhy = copy.deepcopy(u_hy)
                         for i in range(len(Remindid)):
-                            temp_pos = np.insert(temp_pos,Remindid[i],np.array([tempx[i],tempy[i]]),axis=0)
-                            temp_uhx = np.insert(temp_uhx,Remindid[i],np.array([tempuhx]),axis=0)
-                            temp_uhy = np.insert(temp_uhy,Remindid[i],np.array([tempuhy]),axis=0)
-                        
+                                temp_uhx = np.insert(temp_uhx,Remindid[i],np.array([tempuhx[i]]),axis=0)
+                                temp_uhy = np.insert(temp_uhy,Remindid[i],np.array([tempuhy[i]]),axis=0)
+                                temp_pos = np.insert(temp_pos,Remindid[i],np.array([tempx[i],tempy[i]]),axis=0)
                         for k in range(n*batch):
                             Px, Py = temp_pos[k, :]
                             self.res.put({
@@ -229,10 +225,9 @@ class workers(Process):
                                 "Id": IdList[k],
                                 "theta": veAngle,
                                 "index": epoch,
-                                "ux": u_hx[k, epoch + 1],
-                                "uy": u_hy[k, epoch + 1]
+                                "ux": temp_uhx[k, epoch + 1],
+                                "uy": temp_uhy[k, epoch + 1]
                             })
-
                         # 计算下一时刻的连通度
                         L, A, d = L_Mat(positions, R, delta)
                         value, vectors = np.linalg.eig(L)
@@ -240,7 +235,6 @@ class workers(Process):
                         index = np.argsort(value)
                         vectors = vectors[:, index]
                         value = value[index]
-
                     else:
                         activate = np.ones(n)
                         ue = ccangle(
@@ -251,7 +245,6 @@ class workers(Process):
                         # break
                         ue_hx[:, epoch + 1] = ue[:, 0]
                         ue_hy[:, epoch + 1] = ue[:, 1]
-
                         # 判断无人机控制率是否改变，使无人机轨迹平滑
                         # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
                         changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
@@ -269,7 +262,6 @@ class workers(Process):
                                 uc[agent, :] = vc_Max * uc[agent, :] / dist
                         uc_hx[:, epoch + 1] = uc[:, 0]
                         uc_hy[:, epoch + 1] = uc[:, 1]
-
                         # 总控制
                         # u = 3 * uc + ue
                         u = 0.3 * uc + ue
@@ -282,11 +274,11 @@ class workers(Process):
                         Angle_h[:, epoch + 1] = np.pi + np.arctan(
                             (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
                         Angle = Angle_h[:, epoch + 1]
-
                         changeIndex = u_hy[:, epoch + 1] > vMax
                         u_hy[changeIndex, epoch + 1] = vMax
 
                         veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
+
                         # 判断无人机是否执行覆盖任务
                         changeIndex = Px_h[:, epoch] <= -2.5
                         activate[changeIndex] = 0
@@ -301,6 +293,7 @@ class workers(Process):
                         #更新位置
                         positions[:, 0] = Px_h[:, epoch + 1]
                         positions[:, 1] = Py_h[:, epoch + 1]
+                        print(positions)
                         for k in range(n*batch):
                             Px, Py = positions[k, :]
                             self.res.put({
@@ -312,12 +305,10 @@ class workers(Process):
                                 "ux": u_hx[k, epoch + 1],
                                 "uy": u_hy[k, epoch + 1]
                             })
-                            
-                        if(epoch==UavDropTime):
-                            tempuhx = u_hx[Remindid,:]
-                            tempuhy = u_hy[Remindid,:]
-                            tempx = positions[Remindid, 0]
-                            tempy = positions[Remindid, 1]
+                        tempx = positions[Remindid, 0]
+                        tempy = positions[Remindid, 1]
+                        tempuhx = u_hx[Remindid,:]
+                        tempuhy = u_hy[Remindid,:]
                         # 计算下一时刻的连通度
                         L, A, d = L_Mat(positions, R, delta)
                         value, vectors = np.linalg.eig(L)
@@ -325,6 +316,8 @@ class workers(Process):
                         index = np.argsort(value)
                         vectors = vectors[:, index]
                         value = value[index]
+
+                   
 
                     print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
                     lambda_h[epoch+1] = value[1]
@@ -616,12 +609,13 @@ if __name__ == '__main__':
 
         while not resultStorage.empty():
             waypoint = resultStorage.get()
+            
             # 取出实际位置和速度
             vx = waypoint['ux']
             vy = waypoint['uy']
             desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
 
-            # 获取对应ID的无人机控制器实例positions
+            # 获取对应ID的无人机控制器实例
             cf = allcfsDict[waypoint['Id']]
 
             actualPosition = cf.position()
