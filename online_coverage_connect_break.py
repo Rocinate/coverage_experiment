@@ -35,9 +35,9 @@ if not args.local:
     from pycrazyswarm import *
 
 # 自定义库
-from algorithms.LaplaMat import L_Mat
-from algorithms.connect_preserve import con_pre
-from algorithms.ccangle import ccangle
+from algorithms.connect_coverage.LaplaMat import L_Mat
+from algorithms.connect_coverage.connect_preserve import con_pre
+from algorithms.connect_coverage.ccangle import ccangle
 
 # 读取无人机位置配置
 with open("online_simulation_dev/crazyfiles.yaml", "r") as f:

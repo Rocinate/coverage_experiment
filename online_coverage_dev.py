@@ -117,6 +117,7 @@ class workers(Process):
             for epoch in range(epochNum):
                 # print(value)
                 if positions[:, 0].max() > 2.5:
+                    # 返航
                     break
                 else:
                     activate = np.ones(n)
