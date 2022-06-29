@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
-import enum
 from scipy.spatial.transform import Rotation
 import sys
 import os
@@ -53,12 +52,10 @@ cov = 4/180*np.pi  # 单机覆盖角度
 
 # 参数设置
 R = 1.5  # 通信半径
-n = len(allCrazyFlies)  # 无人机数量/batch
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
 vMax = 0.2  # 连通保持最大速度（用于限幅）
 vc_Max =  0.01 # connect speed limit
-veAngle = np.zeros(n) # 无人机朝向角
 totalTime = 1000  # 仿真总时长
 dt = 0.1  # 控制器更新频率
 epochNum = int(np.floor(totalTime / dt))
@@ -80,8 +77,9 @@ class workers(Process):
         # 获取独立批次信息
         batchList = set([item['Batch'] for item in allCrazyFlies])
 
-        self.n = len(allCrazyFlies) / len(batchList) # 每批次无人机数量
+        self.n = int(len(allCrazyFlies) / len(batchList)) # 每批次无人机数量
         self.batch = len(batchList) # 批次数目
+        # 批次无人机状态
         self.batchStatus = [0] * len(allCrazyFlies)
 
         # 将相同批次的无人机归类
@@ -129,18 +127,18 @@ class workers(Process):
     # 用于初始化参数储存空间
     def storage_init(self):
         # 无人机位置，角度数据保存
-        Px_h = np.zeros((self.batch, n, epochNum))
-        Py_h = np.zeros((self.batch, n, epochNum))
-        Angle_h = np.zeros((self.batch, n, epochNum))
+        Px_h = np.zeros((self.batch, self.n, epochNum))
+        Py_h = np.zeros((self.batch, self.n, epochNum))
+        Angle_h = np.zeros((self.batch, self.n, epochNum))
 
         # 日志向量定义（记录控制量）
-        ue_hx = np.zeros((self.batch, n, epochNum))
-        ue_hy = np.zeros((self.batch, n, epochNum))
-        uc_hx = np.zeros((self.batch, n, epochNum))
-        uc_hy = np.zeros((self.batch, n, epochNum))
-        u_hx = np.zeros((self.batch, n, epochNum))
-        u_hy = np.zeros((self.batch, n, epochNum))
-        veAngle_h = np.zeros((self.batch, n, epochNum))
+        ue_hx = np.zeros((self.batch, self.n, epochNum))
+        ue_hy = np.zeros((self.batch, self.n, epochNum))
+        uc_hx = np.zeros((self.batch, self.n, epochNum))
+        uc_hy = np.zeros((self.batch, self.n, epochNum))
+        u_hx = np.zeros((self.batch, self.n, epochNum))
+        u_hy = np.zeros((self.batch, self.n, epochNum))
+        veAngle_h = np.zeros((self.batch, self.n, epochNum))
         lambda_h = np.zeros((self.batch, epochNum))
 
         # 首值初始化
@@ -167,81 +165,81 @@ class workers(Process):
         pass
 
     def inControl(self, batchIndex):
-        activate = np.ones(n) # 判断无人机是否参与覆盖，参与赋值1，不参与复制0
+        epoch = self.epoch
+        activate = np.ones(self.n) # 判断无人机是否参与覆盖，参与赋值1，不参与复制0
 
-        # 角度覆盖控制率
-        activate = np.ones(n)
         ue = ccangle(
-            positions,
-            Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
+            self.positions[batchIndex, :, :],
+            self.Angle_h[batchIndex, :, epoch], self.ue_hy[batchIndex, :, epoch], self.veAngle_h[batchIndex, :, epoch],
             angleStart, angleEnd, R, vMax, cov)
         # print(ue)
         # break
-        ue_hx[:, epoch + 1] = ue[:, 0]
-        ue_hy[:, epoch + 1] = ue[:, 1]
+        self.ue_hx[batchIndex, :, epoch + 1] = ue[:, 0]
+        self.ue_hy[batchIndex, :, epoch + 1] = ue[:, 1]
 
         # 判断无人机控制率是否改变，使无人机轨迹平滑
         # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-        changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
-        ue_hx[changeIndex, epoch + 1] = ue_hx[changeIndex, epoch]
-        changeIndex = np.abs(ue_hy[:, epoch + 1] - ue_hy[:, epoch]) < 0.0001
-        ue_hy[changeIndex, epoch + 1] = ue_hy[changeIndex, epoch]
+        changeIndex = np.abs(self.ue_hx[batchIndex, :, epoch + 1] - self.ue_hx[batchIndex, :, epoch]) < 0.0001
+        self.ue_hx[batchIndex, changeIndex, epoch + 1] = self.ue_hx[batchIndex, changeIndex, epoch]
+        changeIndex = np.abs(self.ue_hy[batchIndex, :, epoch + 1] - self.ue_hy[batchIndex, :, epoch]) < 0.0001
+        self.ue_hy[batchIndex, changeIndex, epoch + 1] = self.ue_hy[batchIndex, changeIndex, epoch]
         #分段控制
-        features = np.ones(n) * value[1]
+        features = np.ones(self.n) * value[1]
         featureVec = vectors[:, 1]
-        uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
+        uc = con_pre(features, featureVec, self.positions[batchIndex, :, :], d, A, R, delta, epsilon)
         # 限幅
-        for agent in range(n):
+        for agent in range(self.n):
             dist = np.linalg.norm(uc[agent, :])
             if dist > vc_Max:
                 uc[agent, :] = vc_Max * uc[agent, :] / dist
-        uc_hx[:, epoch + 1] = uc[:, 0]
-        uc_hy[:, epoch + 1] = uc[:, 1]
+        self.uc_hx[batchIndex, :, epoch + 1] = uc[:, 0]
+        self.uc_hy[batchIndex, :, epoch + 1] = uc[:, 1]
 
         # 总控制
         u = 0.3 * uc + ue
 
         # 控制率叠加
-        u_hx[:, epoch + 1] = u[:, 0]
-        u_hy[:, epoch + 1] = u[:, 1]
-        Px_h[:, epoch + 1] = Px_h[:, epoch] + u[:, 0] * dt
-        Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
-        Angle_h[:, epoch + 1] = np.pi + np.arctan(
-            (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
-        Angle = Angle_h[:, epoch + 1]
+        self.u_hx[batchIndex, :, epoch + 1] = u[:, 0]
+        self.u_hy[batchIndex, :, epoch + 1] = u[:, 1]
+        self.Px_h[batchIndex, :, epoch + 1] = self.Px_h[batchIndex, :, epoch] + u[:, 0] * dt
+        self.Py_h[batchIndex, :, epoch + 1] = self.Py_h[batchIndex, :, epoch] + u[:, 1] * dt
+        self.Angle_h[batchIndex, :, epoch + 1] = np.pi + np.arctan(
+            (circleY - self.Py_h[batchIndex, :, epoch + 1]) / (circleX - self.Px_h[batchIndex, :, epoch + 1]))
+        Angle = self.Angle_h[batchIndex, :, epoch + 1]
 
-        changeIndex = u_hy[:, epoch + 1] > vMax
-        u_hy[changeIndex, epoch + 1] = vMax
+        changeIndex = self.u_hy[batchIndex, :, epoch + 1] > vMax
+        self.u_hy[batchIndex, changeIndex, epoch + 1] = vMax
 
-        veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
+        self.veAngle_h[batchIndex, :, epoch + 1] = np.arcsin(self.u_hy[batchIndex, :, epoch + 1] / vMax)
         # 判断无人机是否执行覆盖任务
-        changeIndex = Px_h[:, epoch] <= -2.5
+        changeIndex = self.Px_h[batchIndex, :, epoch] <= -2.5
         activate[changeIndex] = 0
-        u_hx[changeIndex, epoch + 1] = u_hx[changeIndex, epoch]
-        u_hy[changeIndex, epoch + 1] = u_hy[changeIndex, epoch]
-        Px_h[changeIndex, epoch + 1] = Px_h[changeIndex, epoch] + u_hx[changeIndex, epoch + 1] * dt
-        Py_h[changeIndex, epoch + 1] = Py_h[changeIndex, epoch] + u_hy[changeIndex, epoch + 1] * dt
-        Angle_h[changeIndex, epoch + 1] = np.pi + np.arctan(
-            (circleY - Py_h[changeIndex, epoch + 1]) / (circleX - Px_h[changeIndex, epoch + 1]))
-        Angle[changeIndex] = Angle_h[changeIndex, epoch + 1]
-        veAngle_h[changeIndex, epoch + 1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
+        self.u_hx[batchIndex, changeIndex, epoch + 1] = self.u_hx[batchIndex, changeIndex, epoch]
+        self.u_hy[batchIndex, changeIndex, epoch + 1] = self.u_hy[batchIndex, changeIndex, epoch]
+        self.Px_h[batchIndex, changeIndex, epoch + 1] = self.Px_h[batchIndex, changeIndex, epoch] + self.u_hx[batchIndex, changeIndex, epoch + 1] * dt
+        self.Py_h[batchIndex, changeIndex, epoch + 1] = self.Py_h[batchIndex, changeIndex, epoch] + self.u_hy[batchIndex, changeIndex, epoch + 1] * dt
+        self.Angle_h[batchIndex, changeIndex, epoch + 1] = np.pi + np.arctan(
+            (circleY - self.Py_h[batchIndex, changeIndex, epoch + 1]) / (circleX - self.Px_h[batchIndex, changeIndex, epoch + 1]))
+        Angle[changeIndex] = self.Angle_h[batchIndex, changeIndex, epoch + 1]
+        self.veAngle_h[batchIndex, changeIndex, epoch + 1] = np.arcsin(self.u_hy[batchIndex, changeIndex, epoch + 1] / vMax)
         #更新位置
-        positions[:, 0] = Px_h[:, epoch + 1]
-        positions[:, 1] = Py_h[:, epoch + 1]
-        for k in range(n*batch):
-            Px, Py = positions[k, :]
+        self.positions[batchIndex, :, 0] = self.Px_h[batchIndex, :, epoch + 1]
+        self.positions[batchIndex, :, 1] = self.Py_h[batchIndex, :, epoch + 1]
+        # 发布对应无人机执行情况
+        for k in range(self.n*batchIndex, self.n * (batchIndex+1)):
+            Px, Py = self.positions[batchIndex, k, :]
             self.res.put({
                 "Px": Px,
                 "Py": Py,
-                "Id": IdList[k],
-                "theta": veAngle,
+                "Id": self.IdList[k],
+                "theta": 0, # 角度信息
                 "index": epoch,
-                "ux": u_hx[k, epoch + 1],
-                "uy": u_hy[k, epoch + 1]
+                "ux": self.u_hx[batchIndex, k, epoch + 1],
+                "uy": self.u_hy[batchIndex, k, epoch + 1]
             })
 
         # 计算下一时刻的连通度
-        L, A, d = L_Mat(positions, R, delta)
+        L, A, d = L_Mat(self.positions[batchIndex, :, :], R, delta)
         value, vectors = np.linalg.eig(L)
         # 从小到大对特征值进行排序
         index = np.argsort(value)
@@ -249,7 +247,7 @@ class workers(Process):
         value = value[index]
 
         print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
-        lambda_h[epoch+1] = value[1]
+        self.lambda_h[batchIndex, epoch+1] = value[1]
 
     def checkStatus(self):
         pass
@@ -264,7 +262,7 @@ class workers(Process):
 
                 for index in range(self.batch):
                     # 更新位置，计算控制率
-                    self.updateControl(index)
+                    self.inControl(index)
                     # 根据无人机位置判断当前执行任务
                     self.checkStatus()
                 self.epoch += 1
@@ -335,7 +333,7 @@ if __name__ == '__main__':
             cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate = 0)
 
             executeNumber += 1
-            if(executeNumber == n):
+            if(executeNumber == len(allCrazyFlies)):
                 timeHelper.sleepForRate(framRate)
                 executeNumber = 0
 

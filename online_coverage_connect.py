@@ -61,6 +61,7 @@ epsilon = 0.1  # 最小代数连通度
 vMax = 0.2  # 连通保持最大速度（用于限幅）
 vc_Max =  0.01 # connect speed limit
 veAngle = np.zeros(n) # 无人机朝向角
+interval = 20 # 批次出发时间间隔
 totalTime = 1000  # 仿真总时长
 dt = 0.1  # 控制器更新频率
 epochNum = int(np.floor(totalTime / dt))
