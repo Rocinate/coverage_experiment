@@ -11,6 +11,7 @@ import matplotlib.patches as patches
 import time
 import argparse
 from multiprocessing import Process, Queue
+from enum import Enum
 
 # if python3
 # time.clock = time.time
@@ -36,6 +37,8 @@ from algorithms.connect_coverage.LaplaMat import L_Mat
 from algorithms.connect_coverage.connect_preserve import con_pre
 from algorithms.connect_coverage.ccangle import ccangle
 
+# 无人机状态枚举
+Status = Enum("Status", ("Stay", "Cover", "BackUp", "BackLeft", "BackDown"))
 
 # 读取无人机位置配置
 with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
@@ -54,6 +57,7 @@ cov = 4/180*np.pi  # 单机覆盖角度
 R = 1.5  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
+interval = 20 # 批次出发时间间隔
 vMax = 0.2  # 连通保持最大速度（用于限幅）
 vc_Max =  0.01 # connect speed limit
 totalTime = 1000  # 仿真总时长
@@ -80,7 +84,7 @@ class workers(Process):
         self.n = int(len(allCrazyFlies) / len(batchList)) # 每批次无人机数量
         self.batch = len(batchList) # 批次数目
         # 批次无人机状态
-        self.batchStatus = [0] * len(allCrazyFlies)
+        self.flightStatus = [Status.Stay] * len(allCrazyFlies)
 
         # 将相同批次的无人机归类
         positions = [[]] * len(batchList)
@@ -94,9 +98,6 @@ class workers(Process):
         for index, batchPos in enumerate(positions):
             angles[index, :] = np.pi + np.arctan((circleY - batchPos[:, 1]) / (circleX - batchPos[:, 0]))
         self.angles = angles
-        
-        # 无人机当前任务
-        self.task = ['Start'] * (self.n * self.batch)
 
         # 损失和连通度
         self.L = np.zeros((self.batch, self.n, self.n))
@@ -126,19 +127,22 @@ class workers(Process):
 
     # 用于初始化参数储存空间
     def storage_init(self):
+        # 历史储存大小
+        shape = (self.batch, self.n, epochNum)
+
         # 无人机位置，角度数据保存
-        Px_h = np.zeros((self.batch, self.n, epochNum))
-        Py_h = np.zeros((self.batch, self.n, epochNum))
-        Angle_h = np.zeros((self.batch, self.n, epochNum))
+        Px_h = np.zeros(shape)
+        Py_h = np.zeros(shape)
+        Angle_h = np.zeros(shape)
 
         # 日志向量定义（记录控制量）
-        ue_hx = np.zeros((self.batch, self.n, epochNum))
-        ue_hy = np.zeros((self.batch, self.n, epochNum))
-        uc_hx = np.zeros((self.batch, self.n, epochNum))
-        uc_hy = np.zeros((self.batch, self.n, epochNum))
-        u_hx = np.zeros((self.batch, self.n, epochNum))
-        u_hy = np.zeros((self.batch, self.n, epochNum))
-        veAngle_h = np.zeros((self.batch, self.n, epochNum))
+        ue_hx = np.zeros(shape)
+        ue_hy = np.zeros(shape)
+        uc_hx = np.zeros(shape)
+        uc_hy = np.zeros(shape)
+        u_hx = np.zeros(shape)
+        u_hy = np.zeros(shape)
+        veAngle_h = np.zeros(shape)
         lambda_h = np.zeros((self.batch, epochNum))
 
         # 首值初始化
@@ -160,9 +164,6 @@ class workers(Process):
         self.uc_hy = uc_hy
         self.veAngle_h = veAngle_h
         self.lambda_h = lambda_h
-
-    def executeTask(self):
-        pass
 
     def inControl(self, batchIndex):
         epoch = self.epoch
@@ -249,9 +250,48 @@ class workers(Process):
         print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
         self.lambda_h[batchIndex, epoch+1] = value[1]
 
+    # 状态转移
     def checkStatus(self):
-        pass
+        for index in range(self.n * self.batch):
+            # 计算无人机开始飞行的时间节点
+            startEpoch = (index % self.n) * interval / dt
+            batchIndex = index // self.n
 
+            # 获取当前实时位置
+            Px, Py = self.positions[batchIndex, index - self.n * batchIndex, :]
+            ux, uy = 0, 0
+
+            # 无人机由静止开始覆盖任务
+            if self.flightStatus[index] == Status.Stay and self.epoch >= startEpoch:
+                self.flightStatus[index] = Status.Cover
+                continue
+            # 无人机静止
+            elif self.flightStatus[index] == Status.Stay:
+                ux, uy = 0, 0
+            # 无人机由覆盖开始返回
+            elif self.flightStatus[index] == Status.Cover and Px > 2.5:
+                self.flightStatus[index] = Status.Back
+                ux, uy = 0, vMax
+            elif self.flightStatus[index] == Status.Back and Px > 2.5 and Py < 2:
+                ux, uy = 0, vMax
+            elif self.flightStatus[index] == Status.Back and Py > 2 and Px > -2:
+                ux, uy = -vMax, 0
+            elif self.flightStatus[index] == Status.Back and Px < -2 and Py > -1.5:
+                ux, uy = 0, -vMax
+            # 只要有一个满足该条件，该批次所有无人机都重新开始覆盖任务
+            elif self.flightStatus[index] == Status.Back and Px < -2 and Py < -1.5:
+                self.flightStatus[batchIndex * self.n: (batchIndex+1) * self.n] = [Status.Cover] * self.n
+                continue
+
+            self.res.put({
+                    "Px": Px,
+                    "Py": Py,
+                    "Id": self.IdList[index],
+                    "theta": 0, # 角度信息
+                    "index": self.epoch,
+                    "ux": ux,
+                    "uy": uy
+                })
 
     def run(self):
         print("start calculating!")
@@ -260,11 +300,13 @@ class workers(Process):
             while self.epoch < epochNum:
                 self.update_loss_conn()
 
+                # 根据无人机位置判断当前执行任务
+                self.checkStatus()
                 for index in range(self.batch):
-                    # 更新位置，计算控制率
-                    self.inControl(index)
-                    # 根据无人机位置判断当前执行任务
-                    self.checkStatus()
+                    # 如果当前批次的所有无人机都处于覆盖状态
+                    if all(self.flightStatus[index * self.n: (index+1) * self.n] == Status.Cover):
+                        # 更新位置，计算控制率
+                        self.inControl(index)
                 self.epoch += 1
         except Exception as e:
             print(e)
