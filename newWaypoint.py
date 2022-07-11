@@ -26,12 +26,6 @@ class Waypoint:
         self.arrival = arrival
         self.duration = duration
 
-    def __lt__(self, other):
-        return self.arrival < other.arrival
-
-    def __repr__(self):
-        return "Ag {} at {} s. [{}, {}, {}]".format(self.agent, self.arrival, self.x, self.y, self.z)
-
 
 if __name__ == "__main__":
     # load csv file
