@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
-
 class Controller:
     def __init__(self, n, angleStart, angleEnd, radius, vMax, cov, delta, epsilon):
         self.n = n # 无人机数目
@@ -10,7 +9,7 @@ class Controller:
         self.radius = radius # 连通半径
         self.vMax = vMax # 最大速度限制
         self.cov = cov # cov 角度覆盖范围，通常为2°
-        
+
         # 参数
         self.delta = delta
         self.epsilon = epsilon
