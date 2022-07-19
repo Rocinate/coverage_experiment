@@ -268,7 +268,7 @@ class Workers(Process):
             # 已返回覆盖区域
             elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.5 and Py > -2.5:
                 self.flightStatus[index] = Status.Cover
-            elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum // 3:
+            elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum//4 and index in brokenIndex:
                 self.flightStatus[index] = Status.Broken
 
 

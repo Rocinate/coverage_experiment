@@ -86,9 +86,10 @@ if __name__ == '__main__':
                             np.cos(angle) for angle in angleList] + [circleX]
         yList = [circleY] + [circleY + r *
                             np.sin(angle) for angle in angleList] + [circleY]
+        epoch = 0
         # 动态绘图
         plt.ion()
-        plt.title("UAVs track")
+        titleHandle = plt.title(f"UAVs track epoch {epoch}")
         plt.xlim([-5, 10])
         plt.ylim([-5, 5])
 
@@ -120,8 +121,10 @@ if __name__ == '__main__':
 
             # 获取了所有无人机的位置信息，进行图像更新
             if count == n:
+                epoch += 1
                 count = 0
                 agentHandle.set_offsets(positions)
+                plt.setp(titleHandle, text = f"UAVs track epoch {epoch}")
 
                 for idx, angle in enumerate(angles):
                     if angle < angleEnd and angle > angleStart:
