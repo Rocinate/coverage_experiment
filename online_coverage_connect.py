@@ -10,10 +10,24 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import time
 import argparse
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
+from algorithms.connect_coverage.worker import Workers
 
 # if python3
 # time.clock = time.time
+
+# 飞行参数
+Z = 0.5 # 高度
+dt = 0.1 # 控制器更新频率
+
+# 参数配置
+r = 2.0 # 雷达半径 
+circleX, circleY = 8.0, 0.  # 雷达中心
+angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
+cov = 4/180*np.pi  # 单机覆盖角度
+# 覆盖范围
+positionStart = 0.
+positionEnd = 8.
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -31,181 +45,14 @@ if not args.local:
     # 无人机接口
     from pycrazyswarm import *
 
-# 自定义库
-from algorithms.connect_coverage.LaplaMat import L_Mat
-from algorithms.connect_coverage.connect_preserve import con_pre
-from algorithms.connect_coverage.ccangle import ccangle
-
-
 # 读取无人机位置配置
-with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
-# with open("crazyfiles.yaml", "r") as f:
+# with open("online_simulation_dev/crazyfiles.yaml", "r") as f:
+with open("crazyfiles.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
-IdList = [item['Id'] for item in allCrazyFlies]
-positions = np.array([item['Position'] for item in allCrazyFlies])
 
 # 实验参数
 STOP = False
-r = 2.0 # 雷达半径 
-circleX, circleY = 8.0, 0.5  # 雷达中心
-angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 4/180*np.pi  # 单机覆盖角度
-
-# 参数设置
-R = 1.5  # 通信半径
-n = len(allCrazyFlies)  # 无人机数量/batch
-batch = 1  # 批次
-delta = 0.1  # 通信边界边权大小，越小效果越好
-epsilon = 0.1  # 最小代数连通度
-vMax = 0.2  # 连通保持最大速度（用于限幅）
-vc_Max =  0.01 # connect speed limit
-veAngle = np.zeros(n) # 无人机朝向角
-totalTime = 1000  # 仿真总时长
-dt = 0.1  # 控制器更新频率
-epochNum = int(np.floor(totalTime / dt))
-draw = False # 是否画图
-Z = 0.5 # 高度
-calculTimeOut = 10 # 每轮运算超时设定
-
-class workers(Process):
-    def __init__(self, name, res):
-        Process.__init__(self)
-        self.res = res
-        self.name = name
-    
-    def run(self):
-        print("start calculating!")
-        global positions
-        try:
-            # 无人机初始角度
-            Angle = np.pi + np.arctan((circleY - positions[:, 1]) / (circleX - positions[:, 0]))
-            # 无人机位置，角度数据保存
-            Px_h = np.zeros((n*batch, epochNum))
-            Py_h = np.zeros((n*batch, epochNum))
-            Angle_h = np.zeros((n*batch, epochNum))
-            Px_h[:, 0] = positions[:, 0]
-            Py_h[:, 0] = positions[:, 1]
-            Angle_h[:, 0] = Angle
-
-            # 日志向量定义（记录控制量）
-            ue_hx = np.zeros((n*batch, epochNum))
-            ue_hy = np.zeros((n*batch, epochNum))
-            ue_hx[:, 0] = vMax
-            uc_hx = np.zeros((n*batch, epochNum))
-            uc_hy = np.zeros((n*batch, epochNum))
-            u_hx = np.zeros((n*batch, epochNum))
-            u_hy = np.zeros((n*batch, epochNum))
-            u_hx[:, 0] = ue_hx[:, 0] + uc_hx[:, 0]
-            u_hy[:, 0] = ue_hy[:, 0] + uc_hy[:, 0]
-            veAngle_h = np.zeros((n*batch, epochNum))
-            lambda_h = np.zeros(epochNum)
-
-            activate = np.ones(n) # 判断无人机是否参与覆盖，参与赋值1，不参与复制0
-
-            # 初始损失和连通度计算
-            L, A, d = L_Mat(positions, R, delta)
-
-            value, vectors = np.linalg.eig(L)
-            # 从小到大对特征值进行排序
-            index = np.argsort(value)
-            vectors = vectors[:, index]
-            value = value[index]
-
-            lambda_h[0] = value[1]
-            print("1时刻的连通度为{}".format(value[1]))
-            # plt.show()
-
-            for epoch in range(epochNum):
-                # print(value)
-                if positions[:, 0].max() > 2.5:
-                    break
-                else:
-                    # 角度覆盖控制率
-                    activate = np.ones(n)
-                    ue = ccangle(
-                        positions,
-                        Angle_h[:, epoch], ue_hy[:, epoch], veAngle_h[:, epoch],
-                        angleStart, angleEnd, R, vMax, cov)
-                    # print(ue)
-                    # break
-                    ue_hx[:, epoch + 1] = ue[:, 0]
-                    ue_hy[:, epoch + 1] = ue[:, 1]
-
-                    # 判断无人机控制率是否改变，使无人机轨迹平滑
-                    # print(np.abs(ue_hx[:, epoch+1] - ue_hx[:,epoch]))
-                    changeIndex = np.abs(ue_hx[:, epoch + 1] - ue_hx[:, epoch]) < 0.0001
-                    ue_hx[changeIndex, epoch + 1] = ue_hx[changeIndex, epoch]
-                    changeIndex = np.abs(ue_hy[:, epoch + 1] - ue_hy[:, epoch]) < 0.0001
-                    ue_hy[changeIndex, epoch + 1] = ue_hy[changeIndex, epoch]
-                    #分段控制
-                    features = np.ones(n) * value[1]
-                    featureVec = vectors[:, 1]
-                    uc = con_pre(features, featureVec, positions, d, A, R, delta, epsilon)
-                    # 限幅
-                    for agent in range(n):
-                        dist = np.linalg.norm(uc[agent, :])
-                        if dist > vc_Max:
-                            uc[agent, :] = vc_Max * uc[agent, :] / dist
-                    uc_hx[:, epoch + 1] = uc[:, 0]
-                    uc_hy[:, epoch + 1] = uc[:, 1]
-
-                    # 总控制
-                    # u = 3 * uc + ue
-                    u = 0.3 * uc + ue
-
-                    # 控制率叠加
-                    u_hx[:, epoch + 1] = u[:, 0]
-                    u_hy[:, epoch + 1] = u[:, 1]
-                    Px_h[:, epoch + 1] = Px_h[:, epoch] + u[:, 0] * dt
-                    Py_h[:, epoch + 1] = Py_h[:, epoch] + u[:, 1] * dt
-                    Angle_h[:, epoch + 1] = np.pi + np.arctan(
-                        (circleY - Py_h[:, epoch + 1]) / (circleX - Px_h[:, epoch + 1]))
-                    Angle = Angle_h[:, epoch + 1]
-
-                    changeIndex = u_hy[:, epoch + 1] > vMax
-                    u_hy[changeIndex, epoch + 1] = vMax
-
-                    veAngle_h[:, epoch + 1] = np.arcsin(u_hy[:, epoch + 1] / vMax)
-                    # 判断无人机是否执行覆盖任务
-                    changeIndex = Px_h[:, epoch] <= -2.5
-                    activate[changeIndex] = 0
-                    u_hx[changeIndex, epoch + 1] = u_hx[changeIndex, epoch]
-                    u_hy[changeIndex, epoch + 1] = u_hy[changeIndex, epoch]
-                    Px_h[changeIndex, epoch + 1] = Px_h[changeIndex, epoch] + u_hx[changeIndex, epoch + 1] * dt
-                    Py_h[changeIndex, epoch + 1] = Py_h[changeIndex, epoch] + u_hy[changeIndex, epoch + 1] * dt
-                    Angle_h[changeIndex, epoch + 1] = np.pi + np.arctan(
-                        (circleY - Py_h[changeIndex, epoch + 1]) / (circleX - Px_h[changeIndex, epoch + 1]))
-                    Angle[changeIndex] = Angle_h[changeIndex, epoch + 1]
-                    veAngle_h[changeIndex, epoch + 1] = np.arcsin(u_hy[changeIndex, epoch + 1] / vMax)
-                    #更新位置
-                    positions[:, 0] = Px_h[:, epoch + 1]
-                    positions[:, 1] = Py_h[:, epoch + 1]
-                    for k in range(n*batch):
-                        Px, Py = positions[k, :]
-                        self.res.put({
-                            "Px": Px,
-                            "Py": Py,
-                            "Id": IdList[k],
-                            "theta": veAngle,
-                            "index": epoch,
-                            "ux": u_hx[k, epoch + 1],
-                            "uy": u_hy[k, epoch + 1]
-                        })
-
-                    # 计算下一时刻的连通度
-                    L, A, d = L_Mat(positions, R, delta)
-                    value, vectors = np.linalg.eig(L)
-                    # 从小到大对特征值进行排序
-                    index = np.argsort(value)
-                    vectors = vectors[:, index]
-                    value = value[index]
-
-                    print("{}时刻的连通度为{}".format(epoch + 1, value[1]))
-                    lambda_h[epoch+1] = value[1]
-        except Exception as e:
-            # print(e)
-            pass
 
 if __name__ == '__main__':
     allWaypoints = []
@@ -218,7 +65,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = workers('Process1', resultStorage)
+        process = Workers('Process1', resultStorage, allCrazyFlies, dt)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -228,6 +75,65 @@ if __name__ == '__main__':
         f = open("record.txt", "wb")
         pickle.dump(allWaypoints, f)
         f.close()
+
+    if args.local:
+        _, ax = plt.subplots()
+
+        intNum = 20  # 覆盖扇面插值数
+        angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
+        # 扇形点位，添加起点保证图像闭合
+        xList = [circleX] + [circleX + r *
+                            np.cos(angle) for angle in angleList] + [circleX]
+        yList = [circleY] + [circleY + r *
+                            np.sin(angle) for angle in angleList] + [circleY]
+        # 动态绘图
+        plt.ion()
+        plt.title("UAVs track")
+        plt.xlim([-5, 10])
+        plt.ylim([-5, 5])
+
+        n = len(allCrazyFlies)
+        positions = np.zeros((n, 2))
+        agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+        angles = np.array([np.pi for _ in range(n)])
+        # 覆盖扇面作图
+        verHandle = [None] * n
+        for index in range(n):
+            # 初始化
+            patch = patches.Polygon([
+                [circleX + r * np.cos(np.pi-cov/2), circleY + r * np.sin(angles[index]-cov/2)],
+                [circleX + r * np.cos(np.pi+cov/2), circleY + r * np.sin(angles[index]+cov/2)],
+                [circleX, circleY]
+            ], fill=False)
+            verHandle[index] = ax.add_patch(patch)
+
+        plt.show()
+        count = 0
+        
+        # 初始化位置信息
+        while not resultStorage.empty():
+            waypoint = resultStorage.get()
+            positions[count, 0] = waypoint['Px']
+            positions[count, 1] = waypoint['Py']
+            angles[count] = waypoint['theta']
+            count += 1
+
+            # 获取了所有无人机的位置信息，进行图像更新
+            if count == n:
+                count = 0
+                agentHandle.set_offsets(positions)
+
+                for idx, angle in enumerate(angles):
+                    if angle < angleEnd and angle > angleStart:
+                        path = [
+                            [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
+                            [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
+                            [circleX, circleY]
+                        ]
+                        plt.setp(verHandle[idx], xy=path)
+                plt.pause(0.000000000001)
+        plt.ioff()
+        plt.show()
 
     if not args.local:
         framRate = 1.0 / dt
@@ -256,22 +162,31 @@ if __name__ == '__main__':
             # 取出实际位置和速度
             vx = waypoint['ux']
             vy = waypoint['uy']
-            desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
+            vz = waypoint['uz']
 
             # 获取对应ID的无人机控制器实例positions
             cf = allcfsDict[waypoint['Id']]
 
-            actualPosition = cf.position()
             quaternion = cf.quaternion()
 
             rot = Rotation.from_quat(quaternion)
             actualPose = rot.as_euler("xyz")
             error = desiredPos - actualPosition
 
-            cf.cmdVelocityWorld(np.array([vx, vy, 0] + kPosition * error), yawRate = 0)
+            actualPosition = cf.position()
+            # 正常飞行
+            if vz == 0:
+                desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
+                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
+            # 损坏坠落
+            elif actualPosition[-1] > 0.05:
+                desiredPos = np.array([waypoint['Px'], waypoint['Py'], actualPosition[-1] + dt * vz])
+                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
+            else:
+                cf.cmdStop()
 
             executeNumber += 1
-            if(executeNumber == n):
+            if(executeNumber == len(allCrazyFlies)):
                 timeHelper.sleepForRate(framRate)
                 executeNumber = 0
 
