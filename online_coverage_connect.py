@@ -124,7 +124,7 @@ if __name__ == '__main__':
                 epoch += 1
                 count = 0
                 agentHandle.set_offsets(positions)
-                plt.setp(titleHandle, text = f"UAVs track epoch {epoch}")
+                plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
                 for idx, angle in enumerate(angles):
                     if angle < angleEnd and angle > angleStart:

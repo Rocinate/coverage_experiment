@@ -188,7 +188,7 @@ class Workers(Process):
                 if Px < positionStart and Py <= 1.0:
                     u_hx[index] = vBack
                     u_hy[index] = 0
-                elif Px < positionStart and Py > 1.0:
+                elif Px < positionStart and Py >= 1.0:
                     u_hx[index] = 0
                     u_hy[index] = -vBack
                     veAngle[index] = -np.pi/2
@@ -204,11 +204,11 @@ class Workers(Process):
                     u_hx[index] = -vBack
                     u_hy[index] = 0
                     veAngle[index] = np.pi
-            elif index % 2 == 9 and status == Status.Back:
-                if Px < positionStart and Py > -1.0:
+            elif index % 2 == 0 and status == Status.Back:
+                if Px < positionStart and Py >= -1.0:
                     u_hx[index] = vBack
                     u_hy[index] = 0
-                elif Px < positionStart and Py < -1.0:
+                elif Px < positionStart and Py <= -1.0:
                     u_hx[index] = 0
                     u_hy[index] = vBack
                     veAngle[index] = -np.pi/2
@@ -224,9 +224,6 @@ class Workers(Process):
                     u_hx[index] = -vBack
                     u_hy[index] = 0
                     veAngle[index] = np.pi
-            elif status == Status.Broken:
-                u_hx[index] = 0
-                u_hy[index] = 0
 
         # 更新历史记录
         self.uc_hy[:, epoch + 1] = uc_hy
@@ -278,7 +275,7 @@ class Workers(Process):
             # 已返回覆盖区域
             elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.0 and Py > -2.0:
                 self.flightStatus[index] = Status.Cover
-            elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum//4 and index in brokenIndex:
+            elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum/2 and index in brokenIndex:
                 self.flightStatus[index] = Status.Broken
 
 
