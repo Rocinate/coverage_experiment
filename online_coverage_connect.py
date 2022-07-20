@@ -89,7 +89,7 @@ if __name__ == '__main__':
         epoch = 0
         # 动态绘图
         plt.ion()
-        titleHandle = plt.title(f"UAVs track epoch {epoch}")
+        titleHandle = plt.title("UAVs track epoch " + str(epoch))
         plt.xlim([-5, 10])
         plt.ylim([-5, 5])
 

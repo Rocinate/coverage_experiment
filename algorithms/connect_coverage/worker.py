@@ -75,7 +75,7 @@ class Workers(Process):
         self.A = A
         self.d = d
 
-        print(f"时刻{self.epoch}的连通度为{self.value[1]}")
+        print("时刻" + str(self.epoch)+ " 的连通度为" + str(self.value[1]))
 
     # 用于初始化参数储存空间
     def storage_init(self):
@@ -274,7 +274,7 @@ class Workers(Process):
             elif self.flightStatus[index] == Status.Cover and Px > positionEnd:
                 self.flightStatus[index] = Status.Back
             # 已返回覆盖区域
-            elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.5 and Py > -2.5:
+            elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.0 and Py > -2.0:
                 self.flightStatus[index] = Status.Cover
             elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum//4 and index in brokenIndex:
                 self.flightStatus[index] = Status.Broken
