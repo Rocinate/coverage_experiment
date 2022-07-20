@@ -55,8 +55,8 @@ class Func:
                 indexPos = np.where(angleList == angles[index])[0][0]
                 bestAngle[index] = (angleList[indexPos - 1] + angleList[indexPos + 1]) / 2
         # 影响程度受距离的影响，距离雷达越近，通常的影响越小
-        beta = 10000
-        gamma = 0.0
+        beta = 0.1
+        gamma = 0.01
         gradient = (gamma - beta) / (self.positionEnd - self.positionStart)
         intercept = beta - self.positionStart * gradient
 

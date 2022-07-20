@@ -21,13 +21,13 @@ Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
 
 # 参数配置
-r = 2.0 # 雷达半径 
-circleX, circleY = 8.0, 0.  # 雷达中心
+r = 2.0 # 雷达半径
+circleX, circleY = 6.0, 0.  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 4/180*np.pi  # 单机覆盖角度
+cov = 5/180*np.pi  # 单机覆盖角度
 # 覆盖范围
-positionStart = 0.
-positionEnd = 8.
+positionStart = -2.5
+positionEnd = 3.0
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)

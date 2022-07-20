@@ -7,22 +7,22 @@ import traceback # 错误堆栈
 from algorithms.connect_coverage.func import Func
 
 # 参数配置
-r = 2.0 # 雷达半径 
-circleX, circleY = 8.0, 0.  # 雷达中心
+r = 2.0 # 雷达半径
+circleX, circleY = 6.0, 0.0  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 4/180*np.pi  # 单机覆盖角度
+cov = 5/180*np.pi  # 单机覆盖角度
 # 覆盖范围
-positionStart = 0.
-positionEnd = 8.
+positionStart = -2.5
+positionEnd = 3.0
 
 # 参数设置
-R = 50  # 通信半径
+R = 10  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-interval = 2 # 批次出发时间间隔
-vMax = 0.5  # 连通保持最大速度（用于限幅）
-vBack = 2. # 无人机返回速度
-totalTime = 1000  # 仿真总时长
+interval = 5.2 # 批次出发时间间隔
+vMax = 0.2  # 连通保持最大速度（用于限幅）
+vBack = 0.3 # 无人机返回速度
+totalTime = 100  # 仿真总时长
 brokenIndex = [1, 5]
 
 # 无人机状态枚举
@@ -182,35 +182,43 @@ class Workers(Process):
             # 控制量为0，不更新任何信息
             if status == Status.Stay:
                 pass
-            if index % 2 == 0 and status == Status.Back:
-                if Px < positionStart and Py < 0:
+            if index % 2 == 1 and status == Status.Back:
+                if Px < positionStart and Py <= 1.0:
                     u_hx[index] = vBack
                     u_hy[index] = 0
-                elif Px < positionStart and Py > 0:
+                elif Px < positionStart and Py > 1.0:
                     u_hx[index] = 0
                     u_hy[index] = -vBack
                     veAngle[index] = -np.pi/2
-                elif Px > positionEnd and Py < 2.5:
+                elif Px >= positionEnd and Py < 2.0:
                     u_hx[index] = 0
                     u_hy[index] = vBack
                     veAngle[index] = np.pi/2
-                elif Px > positionStart and Py >= 2.5:
+                elif Px >= positionEnd and Py >= 2.0:
+                    u_hx[index] = -vBack
+                    u_hy[index] = 0
+                    veAngle[index] = np.pi/2
+                elif Px >= positionStart and Py >= 2.0:
                     u_hx[index] = -vBack
                     u_hy[index] = 0
                     veAngle[index] = np.pi
-            elif status == Status.Back:
-                if Px < positionStart and Py > 0:
+            elif index % 2 == 9 and status == Status.Back:
+                if Px < positionStart and Py > -1.0:
                     u_hx[index] = vBack
                     u_hy[index] = 0
-                elif Px < positionStart and Py < 0:
+                elif Px < positionStart and Py < -1.0:
                     u_hx[index] = 0
                     u_hy[index] = vBack
                     veAngle[index] = -np.pi/2
-                elif Px > positionEnd and Py > -2.5:
+                elif Px >= positionEnd and Py > -2.0:
                     u_hx[index] = 0
                     u_hy[index] = -vBack
                     veAngle[index] = np.pi/2
-                elif Px > positionStart and Py <= -2.5:
+                elif Px >= positionEnd and Py < -2.0:
+                    u_hx[index] = -vBack
+                    u_hy[index] = 0
+                    veAngle[index] = np.pi/2
+                elif Px > positionStart and Py <= -2.0:
                     u_hx[index] = -vBack
                     u_hy[index] = 0
                     veAngle[index] = np.pi
