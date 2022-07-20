@@ -1,4 +1,6 @@
-from multiprocessing import Process, Queue
+# -*- coding: UTF-8 -*-
+#!/usr/bin/env python
+from multiprocessing import Process
 import numpy as np
 from enum import Enum
 import traceback # 错误堆栈
