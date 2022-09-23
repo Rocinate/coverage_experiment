@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
-from scipy.spatial.transform import Rotation
 import sys
 import os
 import pickle
@@ -12,6 +11,7 @@ import time
 import argparse
 from multiprocessing import Queue
 from algorithms.connect_coverage.worker import Workers
+from algorithms.connect_coverage.master import Master
 
 # if python3
 # time.clock = time.time
@@ -24,12 +24,15 @@ np.random.seed(42)
 
 # 参数配置
 r = 2.0 # 雷达半径
+radarGutter = 10 # 镜像雷达位置
 circleX, circleY = 6.0, 0.  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
 cov = 5/180*np.pi  # 单机覆盖角度
 # 覆盖范围
 positionStart = -2.5
 positionEnd = 3.0
+# 修正系数
+kPosition = 1.
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -56,6 +59,14 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 
+def startCrazySwarm(self):
+    # 创建无人机实例
+    swarm = Crazyswarm()
+    timeHelper = swarm.timeHelper
+    allcfs = swarm.allcfs
+
+    return allcfs, timeHelper
+
 if __name__ == '__main__':
     allWaypoints = []
 
@@ -67,7 +78,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Process1', resultStorage, allCrazyFlies, dt)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, radarGutter)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -77,6 +88,16 @@ if __name__ == '__main__':
         f = open("record.txt", "wb")
         pickle.dump(allWaypoints, f)
         f.close()
+
+    # 储存算法计算结果，用于绘图展示
+    graphStorage = Queue()
+    if not args.local:
+        # 与无人机集群建立联系，读取初始化信息
+        allcfs, timeHelper = startCrazySwarm()
+        # 新建线程，进行消息发布管理
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, allcfs, timeHelper)
+    else:
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition)
 
     if args.local:
         _, ax = plt.subplots(figsize=(8,12))
@@ -101,10 +122,6 @@ if __name__ == '__main__':
         agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
         angles = np.array([np.pi for _ in range(n*3)])
 
-        diff1 = np.random.rand(n, 2)
-        diff1[:, 0] = diff1[:, 0] / 2
-        diff2 = np.random.rand(n ,2)
-        diff2[:, 0] = diff2[:, 0] / 2
         # 覆盖扇面作图
         verHandle = [None] * n * 3
         for index in range(n):
@@ -119,8 +136,8 @@ if __name__ == '__main__':
         for index in range(n, 2*n):
             # 初始化
             patch = patches.Polygon([
-                [circleX + r * np.cos(np.pi-cov/2), circleY  + 10+ r * np.sin(angles[index]-cov/2)],
-                [circleX + r * np.cos(np.pi+cov/2), circleY + 10+ r * np.sin(angles[index]+cov/2)],
+                [circleX + r * np.cos(np.pi-cov/2), circleY + 10 + r * np.sin(angles[index]-cov/2)],
+                [circleX + r * np.cos(np.pi+cov/2), circleY + 10 + r * np.sin(angles[index]+cov/2)],
                 [circleX, circleY]
             ], fill=False)
             verHandle[index] = ax.add_patch(patch)
@@ -128,18 +145,18 @@ if __name__ == '__main__':
         for index in range(2*n, 3*n):
             # 初始化
             patch = patches.Polygon([
-                [circleX + r * np.cos(np.pi-cov/2), circleY -10  + r * np.sin(angles[index]-cov/2)],
-                [circleX + r * np.cos(np.pi+cov/2), circleY -10  + r * np.sin(angles[index]+cov/2)],
+                [circleX + r * np.cos(np.pi-cov/2), circleY -10 + r * np.sin(angles[index]-cov/2)],
+                [circleX + r * np.cos(np.pi+cov/2), circleY -10 + r * np.sin(angles[index]+cov/2)],
                 [circleX, circleY]
             ], fill=False)
             verHandle[index] = ax.add_patch(patch)
 
         plt.show()
         count = 0
-        
+
         # 初始化位置信息
-        while not resultStorage.empty():
-            waypoint = resultStorage.get()
+        while not graphStorage.empty():
+            waypoint = graphStorage.get()
             positions[count, 0] = waypoint['Px']
             positions[count, 1] = waypoint['Py']
             angles[count] = waypoint['theta']
@@ -149,24 +166,6 @@ if __name__ == '__main__':
             if count == n:
                 epoch += 1
                 count = 0
-                
-                positions[n:2*n, :] = positions[0:n, :] + diff1
-                positions[n:2*n, 1] = positions[n:2*n, 1] + 10 
-
-                positions[2*n:3*n, :] = positions[0:n, :] + diff2
-                positions[2*n:3*n, 1] = positions[2*n:3*n, 1] - 10
-
-                for flightIndex in range(n, 2*n):
-                    # if flightIndex % 2 == 0:
-                    positions[flightIndex, 0] = positions[flightIndex, 0]
-                    positions[flightIndex, 1] = 20 - positions[flightIndex, 1]
-                    # else:
-                    #     positions[flightIndex, 0] = positions[flightIndex, 0] - 1
-                    #     positions[flightIndex, 1] = positions[flightIndex, 1] 
-                
-                for flightIndex in range(2*n, 3*n):
-                    positions[flightIndex, 0] = -16/121 * positions[flightIndex, 0]**2 + 8/121 * positions[flightIndex, 0] + 1 + positions[flightIndex, 0]
-                    positions[flightIndex, 1] = positions[flightIndex, 1]
 
                 angles[n:2*n] = np.pi + np.arctan((circleY +10 - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
                 angles[2*n:3*n] = np.pi + np.arctan((circleY - 10 - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
@@ -199,81 +198,3 @@ if __name__ == '__main__':
                 plt.pause(0.000000000001)
         plt.ioff()
         plt.show()
-
-    if not args.local:
-        framRate = 1.0 / dt
-
-        print('Start flying!')
-
-        # 创建无人机实例
-        swarm = Crazyswarm()
-        timeHelper = swarm.timeHelper
-        allcfs = swarm.allcfs
-
-        # 所有无人机同时起飞
-        allcfs.takeoff(targetHeight=Z, duration=1.0)
-        # 等待2秒
-        timeHelper.sleep(2.0)
-
-        # 修正系数
-        kPosition = 1.
-        # 获取无人机字典
-        allcfsDict = allcfs.crazyfliesById
-
-        executeNumber = 0
-
-        while not resultStorage.empty():
-            waypoint = resultStorage.get()
-            # 取出实际位置和速度
-            vx = waypoint['ux']
-            vy = waypoint['uy']
-            vz = waypoint['uz']
-
-            # 获取对应ID的无人机控制器实例positions
-            cf = allcfsDict[waypoint['Id']]
-
-            quaternion = cf.quaternion()
-
-            rot = Rotation.from_quat(quaternion)
-            actualPose = rot.as_euler("xyz")
-
-            actualPosition = cf.position()
-            # 正常飞行
-            if vz == 0:
-                desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
-                error = desiredPos - actualPosition
-                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
-            # 损坏坠落
-            elif actualPosition[-1] > 0.05:
-                desiredPos = np.array([waypoint['Px'], waypoint['Py'], actualPosition[-1] + dt * vz])
-                error = desiredPos - actualPosition
-                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
-            else:
-                cf.cmdStop()
-
-            executeNumber += 1
-            if(executeNumber == len(allCrazyFlies)):
-                timeHelper.sleepForRate(framRate)
-                executeNumber = 0
-
-        print('Land!')
-        # print2txt(json.dumps(self.logBuffer))
-        # print('saved data')
-        allcfsDict = allcfs.crazyfliesById
-        cfs = allcfsDict.values()
-        i = 0
-        while True:
-            i=i+1
-            for cf in cfs:
-                current_pos=cf.position()
-                if current_pos[-1]>0.05:
-                    vx=0
-                    vy=0
-                    vz=-0.3
-                    cf.cmdVelocityWorld(np.array([vx, vy, vz] ), yawRate=0)
-                    timeHelper.sleepForRate(framRate)
-                else:
-                    cf.cmdStop()
-                    cfs.remove(cf)
-            if len(cfs)==0:
-                    break

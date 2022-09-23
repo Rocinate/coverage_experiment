@@ -2,9 +2,11 @@
 #!/usr/bin/env python
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+np.random.seed(42)
+
 
 class Func:
-    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon):
+    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon, n):
         self.positionStart = positionStart
         self.positionEnd = positionEnd
         self.angleStart = angleStart
@@ -14,7 +16,7 @@ class Func:
         self.cov = cov
         self.delta = delta
         self.epsilon = epsilon
-
+        self.n = n
 
     # agentPos: 智能体位置信息，第一列x，第二列y
     # ueHisY: 历史控制量
@@ -49,11 +51,13 @@ class Func:
                 connectedIndex = np.where(distConnected <= self.radius)[0]
                 # print(angles)
                 # 取出邻居朝向角
-                angleList = [self.angleStart, self.angleEnd] + angles[connectedIndex].tolist()
+                angleList = [self.angleStart, self.angleEnd] + \
+                    angles[connectedIndex].tolist()
                 angleList = np.array(sorted(angleList))
 
                 indexPos = np.where(angleList == angles[index])[0][0]
-                bestAngle[index] = (angleList[indexPos - 1] + angleList[indexPos + 1]) / 2
+                bestAngle[index] = (
+                    angleList[indexPos - 1] + angleList[indexPos + 1]) / 2
         # 影响程度受距离的影响，距离雷达越近，通常的影响越小
         beta = 0.1
         gamma = 0.01
@@ -63,9 +67,11 @@ class Func:
         alpha = gradient * agentPos[:, 0] + intercept
         sameTrendIndex = ueHisY * (angles - bestAngle) >= 0
 
-        ue[sameTrendIndex] = ueHisY[sameTrendIndex] + alpha[sameTrendIndex] * (angles[sameTrendIndex] - bestAngle[sameTrendIndex])
+        ue[sameTrendIndex] = ueHisY[sameTrendIndex] + alpha[sameTrendIndex] * \
+            (angles[sameTrendIndex] - bestAngle[sameTrendIndex])
         # 相反运动趋势
-        ue[~sameTrendIndex] = -ueHisY[~sameTrendIndex] + alpha[~sameTrendIndex] * (angles[~sameTrendIndex] - bestAngle[~sameTrendIndex])
+        ue[~sameTrendIndex] = -ueHisY[~sameTrendIndex] + alpha[~sameTrendIndex] * \
+            (angles[~sameTrendIndex] - bestAngle[~sameTrendIndex])
         temp = np.abs(ue)
         # 取最小值
         temp[temp > self.vMax] = self.vMax
@@ -73,9 +79,11 @@ class Func:
         # print(ue[:, 1])
 
         # 保证无人机相邻时刻转角的幅度在pi/12之内
-        angleChangeIndex = np.abs(np.arctan(ue/self.vMax) - agentAngles) > np.pi / 30
+        angleChangeIndex = np.abs(
+            np.arctan(ue/self.vMax) - agentAngles) > np.pi / 30
         # 符合条件
-        newAngle = agentAngles[angleChangeIndex] + np.sign(angles[angleChangeIndex] - bestAngle[angleChangeIndex]) * np.pi / 30
+        newAngle = agentAngles[angleChangeIndex] + np.sign(
+            angles[angleChangeIndex] - bestAngle[angleChangeIndex]) * np.pi / 30
         ue[angleChangeIndex] = self.vMax * np.tan(newAngle)
 
         # 保证无人机速度范围在-pi/3 ~ pi/3
@@ -132,11 +140,19 @@ class Func:
             connectedIndex = np.delete(connectedIndex, connectedIndex == i)
 
             for agent in connectedIndex:
-                a2x += (-(A[i, agent])/value)*(positions[i, 0] - positions[agent, 0])*((featureVec[i]-featureVec[agent])**2)
-                a2y += (-(A[i, agent])/value)*(positions[i, 1] - positions[agent, 1])*((featureVec[i]-featureVec[agent])**2)
+                a2x += (-(A[i, agent])/value)*(positions[i, 0] -
+                                               positions[agent, 0])*((featureVec[i]-featureVec[agent])**2)
+                a2y += (-(A[i, agent])/value)*(positions[i, 1] -
+                                               positions[agent, 1])*((featureVec[i]-featureVec[agent])**2)
 
             ucx = -a1*a2x
             ucy = -a1*a2y
 
             uc[i, :] = np.array([ucx, ucy])
         return uc
+
+    
+
+    # 计算组间连通信息
+    def calcGroupConnectBatch(self, positions, targetPos, batchNum, damageIndex, returnY, u_t):
+        pass
