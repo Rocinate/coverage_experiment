@@ -20,8 +20,6 @@ from algorithms.connect_coverage.master import Master
 Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
 
-np.random.seed(42)
-
 # 参数配置
 r = 2.0 # 雷达半径
 radarGutter = 10 # 镜像雷达位置
@@ -33,6 +31,8 @@ positionStart = -2.5
 positionEnd = 3.0
 # 修正系数
 kPosition = 1.
+totalTime = 80
+epochNum = int(np.floor(totalTime / dt))
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -59,7 +59,7 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 
-def startCrazySwarm(self):
+def startCrazySwarm():
     # 创建无人机实例
     swarm = Crazyswarm()
     timeHelper = swarm.timeHelper
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, radarGutter)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -91,110 +91,108 @@ if __name__ == '__main__':
 
     # 储存算法计算结果，用于绘图展示
     graphStorage = Queue()
+
+    # 启动发布线程
     if not args.local:
         # 与无人机集群建立联系，读取初始化信息
         allcfs, timeHelper = startCrazySwarm()
         # 新建线程，进行消息发布管理
-        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, allcfs, timeHelper)
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs, timeHelper)
     else:
-        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition)
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum)
 
-    if args.local:
-        _, ax = plt.subplots(figsize=(8,12))
+    master.daemon = True
+    master.start()
 
-        intNum = 20  # 覆盖扇面插值数
-        angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
-        # 扇形点位，添加起点保证图像闭合
-        # xList = [circleX] + [circleX + r *
-        #                     np.cos(angle) for angle in angleList] + [circleX]
-        # yList = [circleY] + [circleY + r *
-        #                     np.sin(angle) for angle in angleList] + [circleY]
+    _, ax = plt.subplots(figsize=(8,12))
 
-        epoch = 0
-        # 动态绘图
-        plt.ion()
-        titleHandle = plt.title("UAVs track epoch " + str(epoch))
-        plt.xlim([-5, 10])
-        plt.ylim([-15, 15])
+    intNum = 20  # 覆盖扇面插值数
+    angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
+    # 扇形点位，添加起点保证图像闭合
+    # xList = [circleX] + [circleX + r *
+    #                     np.cos(angle) for angle in angleList] + [circleX]
+    # yList = [circleY] + [circleY + r *
+    #                     np.sin(angle) for angle in angleList] + [circleY]
 
-        n = len(allCrazyFlies)
-        positions = np.zeros((n*3, 2))
-        agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
-        angles = np.array([np.pi for _ in range(n*3)])
+    epoch = 0
+    # 动态绘图
+    plt.ion()
+    titleHandle = plt.title("UAVs track epoch " + str(epoch))
+    plt.xlim([-5, 10])
+    plt.ylim([-15, 15])
 
-        # 覆盖扇面作图
-        verHandle = [None] * n * 3
-        for index in range(n):
-            # 初始化
-            patch = patches.Polygon([
-                [circleX + r * np.cos(np.pi-cov/2), circleY + r * np.sin(angles[index]-cov/2)],
-                [circleX + r * np.cos(np.pi+cov/2), circleY + r * np.sin(angles[index]+cov/2)],
-                [circleX, circleY]
-            ], fill=False)
-            verHandle[index] = ax.add_patch(patch)
+    n = len(allCrazyFlies)
+    positions = np.zeros((n*3, 2))
+    agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+    angles = np.array([np.pi for _ in range(n*3)])
 
-        for index in range(n, 2*n):
-            # 初始化
-            patch = patches.Polygon([
-                [circleX + r * np.cos(np.pi-cov/2), circleY + 10 + r * np.sin(angles[index]-cov/2)],
-                [circleX + r * np.cos(np.pi+cov/2), circleY + 10 + r * np.sin(angles[index]+cov/2)],
-                [circleX, circleY]
-            ], fill=False)
-            verHandle[index] = ax.add_patch(patch)
+    # 覆盖扇面作图
+    # verHandle = [None] * n * 3
+    # for index in range(n):
+    #     # 初始化
+    #     patch = patches.Polygon([
+    #         [circleX + r * np.cos(np.pi-cov/2), circleY + r * np.sin(angles[index]-cov/2)],
+    #         [circleX + r * np.cos(np.pi+cov/2), circleY + r * np.sin(angles[index]+cov/2)],
+    #         [circleX, circleY]
+    #     ], fill=False)
+    #     verHandle[index] = ax.add_patch(patch)
 
-        for index in range(2*n, 3*n):
-            # 初始化
-            patch = patches.Polygon([
-                [circleX + r * np.cos(np.pi-cov/2), circleY -10 + r * np.sin(angles[index]-cov/2)],
-                [circleX + r * np.cos(np.pi+cov/2), circleY -10 + r * np.sin(angles[index]+cov/2)],
-                [circleX, circleY]
-            ], fill=False)
-            verHandle[index] = ax.add_patch(patch)
+    # for index in range(n, 2*n):
+    #     # 初始化
+    #     patch = patches.Polygon([
+    #         [circleX + r * np.cos(np.pi-cov/2), circleY + 10 + r * np.sin(angles[index]-cov/2)],
+    #         [circleX + r * np.cos(np.pi+cov/2), circleY + 10 + r * np.sin(angles[index]+cov/2)],
+    #         [circleX, circleY]
+    #     ], fill=False)
+    #     verHandle[index] = ax.add_patch(patch)
 
-        plt.show()
-        count = 0
+    # for index in range(2*n, 3*n):
+    #     # 初始化
+    #     patch = patches.Polygon([
+    #         [circleX + r * np.cos(np.pi-cov/2), circleY -10 + r * np.sin(angles[index]-cov/2)],
+    #         [circleX + r * np.cos(np.pi+cov/2), circleY -10 + r * np.sin(angles[index]+cov/2)],
+    #         [circleX, circleY]
+    #     ], fill=False)
+    #     verHandle[index] = ax.add_patch(patch)
 
-        # 初始化位置信息
-        while not graphStorage.empty():
-            waypoint = graphStorage.get()
-            positions[count, 0] = waypoint['Px']
-            positions[count, 1] = waypoint['Py']
-            angles[count] = waypoint['theta']
-            count += 1
+    plt.show()
+
+    # 初始化位置信息
+    while epoch < epochNum-1:
+        if not graphStorage.empty():
+            positions = graphStorage.get()
+            epoch += 1
 
             # 获取了所有无人机的位置信息，进行图像更新
-            if count == n:
-                epoch += 1
-                count = 0
 
-                angles[n:2*n] = np.pi + np.arctan((circleY +10 - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
-                angles[2*n:3*n] = np.pi + np.arctan((circleY - 10 - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
+            # angles[n:2*n] = np.pi + np.arctan((circleY +10 - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
+            # angles[2*n:3*n] = np.pi + np.arctan((circleY - 10 - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
 
-                agentHandle.set_offsets(positions)
-                plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
+            agentHandle.set_offsets(positions)
+            plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-                for idx, angle in enumerate(angles):
-                    if angle < angleEnd and angle > angleStart and idx < n:
-                        path = [
-                            [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
-                            [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
-                            [circleX, circleY]
-                        ]
-                        plt.setp(verHandle[idx], xy=path)
-                    if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
-                        path = [
-                            [circleX + r * np.cos(angle - cov/2), circleY +10+ r * np.sin(angle - cov/2)],
-                            [circleX + r * np.cos(angle + cov/2), circleY +10+ r * np.sin(angle + cov/2)],
-                            [circleX, circleY+10]
-                        ]
-                        plt.setp(verHandle[idx], xy=path)
-                    if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
-                        path = [
-                            [circleX + r * np.cos(angle - cov/2), circleY -10+ r * np.sin(angle - cov/2)],
-                            [circleX + r * np.cos(angle + cov/2), circleY -10+ r * np.sin(angle + cov/2)],
-                            [circleX, circleY-10]
-                        ]
-                        plt.setp(verHandle[idx], xy=path)
-                plt.pause(0.000000000001)
-        plt.ioff()
-        plt.show()
+            # for idx, angle in enumerate(angles):
+            #     if angle < angleEnd and angle > angleStart and idx < n:
+            #         path = [
+            #             [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
+            #             [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
+            #             [circleX, circleY]
+            #         ]
+            #         plt.setp(verHandle[idx], xy=path)
+            #     if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
+            #         path = [
+            #             [circleX + r * np.cos(angle - cov/2), circleY +10+ r * np.sin(angle - cov/2)],
+            #             [circleX + r * np.cos(angle + cov/2), circleY +10+ r * np.sin(angle + cov/2)],
+            #             [circleX, circleY+10]
+            #         ]
+            #         plt.setp(verHandle[idx], xy=path)
+            #     if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
+            #         path = [
+            #             [circleX + r * np.cos(angle - cov/2), circleY -10+ r * np.sin(angle - cov/2)],
+            #             [circleX + r * np.cos(angle + cov/2), circleY -10+ r * np.sin(angle + cov/2)],
+            #             [circleX, circleY-10]
+            #         ]
+            #         plt.setp(verHandle[idx], xy=path)
+            plt.pause(0.000000000001)
+    plt.ioff()
+    plt.show()

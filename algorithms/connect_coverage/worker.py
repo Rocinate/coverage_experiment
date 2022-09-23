@@ -24,24 +24,22 @@ epsilon = 0.1  # 最小代数连通度
 interval = 2.0 # 批次出发时间间隔
 vMax = 0.5  # 连通保持最大速度（用于限幅）
 vBack = 0.6 # 无人机返回速度
-totalTime = 80  # 仿真总时长
 brokenIndex = [5, 10]
 
 # 无人机状态枚举
 Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))
 
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, radarGutter):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum):
         Process.__init__(self)
         self.res = res
         self.name = name
         self.epoch = 0
         self.dt = dt
-        self.epochNum = int(np.floor(totalTime / dt))
+        self.epochNum = epochNum
         self.getParams(allCrazyFlies)
-        self.radarGutter = radarGutter
         self.func = Func(positionStart, positionEnd, angleStart, angleEnd, 
-        R, vMax, cov, delta, epsilon, self.n)
+        R, vMax, cov, delta, epsilon)
 
     # 从配置文件中解析无人机相关参数
     def getParams(self, allCrazyFlies):
@@ -251,17 +249,11 @@ class Workers(Process):
                 "Px": Px,
                 "Py": Py,
                 "Id": self.IdList[k],
-                "theta": self.Angle_h[k, epoch+1], # 角度信息
                 "index": epoch,
                 "ux": u_hx[k],
                 "uy": u_hy[k],
                 "uz": -0.3 if self.flightStatus[k] == status.Broken else 0
             })
-
-        # 计算连通批次无人机属性
-        # self.func.updateShadow(self.positions, self.radarGutter)
-        
-
 
     # 状态转移
     def updateStatus(self):

@@ -1,22 +1,32 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
 from multiprocessing import Process, Queue
-import numpy as np
 from scipy.spatial.transform import Rotation
-import traceback # 错误堆栈
+from algorithms.connect_coverage.shadow import Shadow
+import numpy as np
+import traceback  # 错误堆栈
+
+# 镜像雷达间隔
+gutter = 10
 
 class Master(Process):
-    def __init__(self, name, res: Queue, graphPipeLine: Queue, allCrazyFlies, dt, Z, kPosition, allcfs=None, timeHelper=None):
+    def __init__(self, name, res: Queue, graphPipeLine: Queue, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs=None, timeHelper=None):
         Process.__init__(self)
+        self.epoch = 0
+        self.epochNum = epochNum
         self.name = name
         self.res = res
         self.allCrazyFlies = allCrazyFlies
         self.dt = dt
-        self.graphPipeLine = graphPipeLine # 用于将数据返回给主线程进行绘画
-        self.publish = publish # 消息发布标志位，是否进行控制
-        self.Z = Z # 飞行高度
+        self.graphPipeLine = graphPipeLine  # 用于将数据返回给主线程进行绘画
+        self.Z = Z  # 飞行高度
         # 修正系数
         self.kPosition = kPosition
+        self.shadow = Shadow(gutter, len(self.allCrazyFlies))
+        self.allcfs = allcfs
+        self.timeHelper = timeHelper
+        self.framRate = 1.0 / self.dt
+        self.publish = True if allcfs != None else False
 
     def init(self):
         # 所有无人机同时起飞
@@ -30,67 +40,89 @@ class Master(Process):
     def run(self):
         print("Master server started")
 
-        framRate = 1.0 / self.dt
+        try:
+            executeNumber = 0
 
-        print('Start flying!')
+            # 位置信息暂存，收集完毕后通过graphPipeLine发送给绘图线程
+            n = len(self.allCrazyFlies)
 
-        executeNumber = 0
+            positions = np.zeros((n, 2))
 
-        while not self.res.empty():
-            waypoint = self.res.get()
-            # 取出实际位置和速度
-            vx = waypoint['ux']
-            vy = waypoint['uy']
-            vz = waypoint['uz']
+            # 起飞✈
+            # self.publish and self.init()
 
-            # 获取对应ID的无人机控制器实例positions
-            cf = allcfsDict[waypoint['Id']]
+            while self.epoch < self.epochNum - 1:
+                if not self.res.empty():
+                    waypoint = self.res.get()
+                    # 取出实际位置和速度
+                    vx = waypoint['ux']
+                    vy = waypoint['uy']
+                    vz = waypoint['uz']
 
-            quaternion = cf.quaternion()
+                    # 信息储存
+                    positions[executeNumber, 0] = waypoint['Px']
+                    positions[executeNumber, 1] = waypoint['Py']
+                    executeNumber += 1
 
-            rot = Rotation.from_quat(quaternion)
-            actualPose = rot.as_euler("xyz")
+                    # 指令广播
+                    if self.publish:
+                        # 获取对应ID的无人机控制器实例positions
+                        cf = self.allcfsDict[waypoint['Id']]
 
-            actualPosition = cf.position()
-            # 正常飞行
-            if vz == 0:
-                desiredPos = np.array([waypoint['Px'], waypoint['Py'], Z])
-                error = desiredPos - actualPosition
-                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
-            # 损坏坠落
-            elif actualPosition[-1] > 0.05:
-                desiredPos = np.array([waypoint['Px'], waypoint['Py'], actualPosition[-1] + dt * vz])
-                error = desiredPos - actualPosition
-                cf.cmdVelocityWorld(np.array([vx, vy, vz] + kPosition * error), yawRate = 0)
-            else:
-                cf.cmdStop()
+                        quaternion = cf.quaternion()
 
-            executeNumber += 1
-            if(executeNumber == len(self.allCrazyFlies)):
-                timeHelper.sleepForRate(framRate)
-                executeNumber = 0
+                        rot = Rotation.from_quat(quaternion)
+                        # 四元数进行结算后的真实角度
+                        actualPose = rot.as_euler("xyz")
 
+                        actualPosition = cf.position()
+                        # 正常飞行
+                        if vz == 0:
+                            desiredPos = np.array([waypoint['Px'], waypoint['Py'], self.Z])
+                            error = desiredPos - actualPosition
+                            cf.cmdVelocityWorld(
+                                np.array([vx, vy, vz] + self.kPosition * error), yawRate=0)
+                        # 损坏坠落
+                        elif actualPosition[-1] > 0.05:
+                            desiredPos = np.array(
+                                [waypoint['Px'], waypoint['Py'], actualPosition[-1] + self.dt * vz])
+                            error = desiredPos - actualPosition
+                            cf.cmdVelocityWorld(
+                                np.array([vx, vy, vz] + self.kPosition * error), yawRate=0)
+                        else:
+                            cf.cmdStop()
+
+                    if executeNumber == n:
+                        self.publish and self.timeHelper.sleepForRate(self.framRate)
+                        self.epoch += 1
+                        executeNumber = 0
+
+                        # 生成影子信息，用于绘图
+                        self.graphPipeLine.put(
+                            self.shadow.getGraphData(positions)
+                        )
+
+            # 执行完毕，停止飞机
+            self.publish and self.stop()
+        except Exception as e:
+            print(traceback.print_exc()) # debug exception
+
+    def stop(self):
         print('Land!')
-        # print2txt(json.dumps(self.logBuffer))
-        # print('saved data')
-        cfs = allcfsDict.values()
+        cfs = self.allcfsDict.values()
         i = 0
         while True:
-            i=i+1
+            i = i+1
             for cf in cfs:
-                current_pos=cf.position()
-                if current_pos[-1]>0.05:
-                    vx=0
-                    vy=0
-                    vz=-0.3
-                    cf.cmdVelocityWorld(np.array([vx, vy, vz] ), yawRate=0)
-                    timeHelper.sleepForRate(framRate)
+                current_pos = cf.position()
+                if current_pos[-1] > 0.05:
+                    vx = 0
+                    vy = 0
+                    vz = -0.3
+                    cf.cmdVelocityWorld(np.array([vx, vy, vz]), yawRate=0)
+                    self.timeHelper.sleepForRate(self.framRate)
                 else:
                     cf.cmdStop()
                     cfs.remove(cf)
-            if len(cfs)==0:
-                    break
-
-        # try:
-        #     while True:
-        #         if self.res.not_empty():
+            if len(cfs) == 0:
+                break

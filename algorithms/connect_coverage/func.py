@@ -4,9 +4,8 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 np.random.seed(42)
 
-
 class Func:
-    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon, n):
+    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon):
         self.positionStart = positionStart
         self.positionEnd = positionEnd
         self.angleStart = angleStart
@@ -16,7 +15,6 @@ class Func:
         self.cov = cov
         self.delta = delta
         self.epsilon = epsilon
-        self.n = n
 
     # agentPos: 智能体位置信息，第一列x，第二列y
     # ueHisY: 历史控制量
