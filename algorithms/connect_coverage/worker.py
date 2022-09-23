@@ -21,11 +21,12 @@ positionEnd = 3.0
 R = 10  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-interval = 5.2 # 批次出发时间间隔
-vMax = 0.2  # 连通保持最大速度（用于限幅）
-vBack = 0.3 # 无人机返回速度
-totalTime = 100  # 仿真总时长
-brokenIndex = [1, 5]
+interval = 2.0 # 批次出发时间间隔
+vMax = 0.5  # 连通保持最大速度（用于限幅）
+vBack = 0.6 # 无人机返回速度
+totalTime = 80  # 仿真总时长
+brokenIndex = []
+# brokenIndex = []
 
 # 无人机状态枚举
 Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))
@@ -275,7 +276,7 @@ class Workers(Process):
             # 已返回覆盖区域
             elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.0 and Py > -2.0:
                 self.flightStatus[index] = Status.Cover
-            elif self.flightStatus[index] == Status.Cover and self.epoch > self.epochNum/2 and index in brokenIndex:
+            elif self.flightStatus[index] == Status.Cover and self.epoch > 500 and index in brokenIndex:
                 self.flightStatus[index] = Status.Broken
 
 

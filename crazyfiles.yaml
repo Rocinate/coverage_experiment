@@ -4,19 +4,19 @@ files:
   Batch: 1
   Position:
   - -2.6
-  - -1.5
+  - -1.0
 - Id: 2
   Pose: 0.0
   Batch: 1
   Position:
   - -2.6
-  - -1.0
+  - -0.5
 - Id: 3
   Pose: 0.0
   Batch: 1
   Position:
   - -2.6
-  - -0.5
+  - -1.5
 - Id: 4
   Pose: 0.0
   Batch: 1

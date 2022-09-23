@@ -35,7 +35,7 @@ from algorithms.cassingle_coverage.cassingle import Cassingle
 from algorithms.cassingle_coverage.graphController import Graph
 
 # 读取无人机位置配置
-# with open("online_simulation/crazyfiles.yaml", "r") as f:
+# with open("stable_angle_coverage_control/crazyfiles.yaml", "r") as f:
 with open("crazyfiles.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
@@ -43,7 +43,7 @@ allCrazyFlies = data['files']
 # 实验参数
 STOP = False
 numIterations = 25
-xRange = 3.0
+xRange = 3.1
 yRange = 2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
 lineSpeed = 0.1
@@ -54,7 +54,8 @@ N = 10
 allcfsTime = T/N
 volume = 0.05
 Z = .0 # 高度
-processNum = len(allCrazyFlies) # 进程数，默认和无人机个数相同
+# processNum = len(allCrazyFlies) # 进程数，默认和无人机个数相同
+processNum = 8
 calculTimeOut = 30 # 每轮运算超时设定
 
 class workers(Process):
@@ -183,6 +184,7 @@ def getWaypoint():
         # 将进程结果取出绘画出来
         while not resultStorage.empty():
             info = resultStorage.get()
+            print(info)
             [matchIndex] =  [index for (index, item) in enumerate(allCrazyFlies) if item['Id'] == info["Id"]]
             allCrazyFlies[matchIndex]['Position'] = info['newPosition']
             allCrazyFlies[matchIndex]['Pose'] = info['newPose']

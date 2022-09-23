@@ -19,22 +19,22 @@ from algorithms.cassingle_coverage.cassingle import Cassingle
 from algorithms.cassingle_coverage.graphController import Graph
 
 # 读取无人机位置配置
-with open("online_simulation/crazyfiles.yaml", "r") as f:
+with open("stable_angle_coverage_control/crazyfiles.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 
 allCrazyFlies = data['files']
 
 STOP = False
 numIterations = 30
-xRange =0.7
-yRange =0.95
+xRange =3.1
+yRange =2.0
 box = np.array([-xRange, xRange, -yRange, yRange])  # 场地范围
 lineSpeed = 0.05
 angularSpeed = 0.5
 T = 3.0
 N = 6
 Z = 0.5
-draw = False # 是否画图
+draw = True # 是否画图
 allcfsTime = T/N
 actualSpeed = 0.05
 
