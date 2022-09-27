@@ -31,7 +31,7 @@ positionStart = -2.5
 positionEnd = 3.0
 # 修正系数
 kPosition = 1.
-totalTime = 80
+totalTime = 80.
 epochNum = int(np.floor(totalTime / dt))
 
 # 添加路径
