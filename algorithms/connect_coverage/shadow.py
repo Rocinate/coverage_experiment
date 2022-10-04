@@ -11,7 +11,7 @@ class Shadow:
         self.gutter = gutter
         # 多批次无人机参数
         self.batchNum = batchNum
-        self.damageIndex = damageIndex
+        self.damageIndex = damageIndex # [[1, 2, 3], [4, 5, 6]]
         self.vMax = vMax
         self.vBack = vBack
         self.positionStart = positionStart
@@ -29,21 +29,18 @@ class Shadow:
 
     # 初始化连通批次无人机参数
     def initBatchParams(self):
-        self.total = 14
-        batchPos = np.zeros((self.total * 2, 2))
+        self.total = 6
+        batchPos = np.zeros((2, self.total, 2))
 
-        # 每批次无人机数量
-        eachNum = int(self.total / self.batchNum)
         # 随机初始化
-        for i in range(self.batchNum * 2):
-            batchPos[i*eachNum: (i+1)*eachNum, :] = np.random.rand((eachNum, 2))
-            batchPos[i*eachNum: (i+1)*eachNum, 0] -= 5
-            if i < self.batchNum:
-                batchPos[i*eachNum: (i+1)*eachNum, 1] += self.gutter
-            else:
-                batchPos[i*eachNum: (i+1)*eachNum, 1] -= self.gutter
+        batchPos = np.random.rand((2, self.total, 2))
+        batchPos[:, self.total, 0] -= 5
+
+        batchPos[0, :, 1] += self.gutter
+        batchPos[1, :, 1] -= self.gutter
         self.batchPos = batchPos
-        self.u_t = np.array([1]*self.total + [0]*self.total)
+        self.u_t = np.zeros((2, self.total, 2))
+        self.u_t[:, :, 0] = self.vMax
 
     # 计算镜像区域位移
     def getBatchDiff(self):
@@ -73,7 +70,14 @@ class Shadow:
             positions[flightIndex, 1] = positions[flightIndex, 1]
 
     def updateConnect(self):
-        pass
+        # 生成上半部分
+        u1, _ = self.calcGroupConnectBatch(self.batchPos[0, :, :], self.radarPos[0:2, :], self.batchNum, self.damageIndex[0], self.returnY[0], self.u_t[0, :, :])
+        self.batchPos[0, :, :] += u1 * self.dt
+        self.u_t[0, :, :] = u1
+        u2, _ = self.calcGroupConnectBatch(self.batchPos[1, :, :], self.radarPos[1:3, :], self.batchNum, self.damageIndex[1], self.returnY[1], self.u_t[1, :, :])
+        self.batchPos[1, :, :] += u2 * self.dt
+        self.u_t[1, :, :] = u2
+        # 生成下班部分
 
     def calcGroupConnectBatch(self, uavPos, radarPos, batchNum, damageIndex, returnY, u_t):
         num = uavPos.shape[0]
@@ -122,16 +126,60 @@ class Shadow:
         connIndex = np.zeros(num)
         j, k = 0, 0
         for i in range(num):
-            if i in damageIndex:
-                continue
-            
+            if not i in damageIndex:
+                # 抵近无人机到达覆盖结束位置，执行返航
+                if uavPos[i, 0] >= self.positionEnd and np.abs(u_t[i, 1]) != self.vBack:
+                    if uavPos[i, 1] > (returnY[0] - returnY[1]) / 2:
+                        u[i, :] = np.array([0, self.vBack])
+                    else:
+                        u[i, :] = np.array([0, -self.vBack])
+                elif uavPos[i, 0] >= self.positionEnd and np.abs(u_t[i, 1]) == self.vBack:
+                    u[i, :] = u_t[i, :]
+                    if uavPos[i, 1] >= returnY[0] or uavPos[i, 1] <= returnY[1]:
+                        u[i, :] = np.array([-self.vBack, 0])
+                elif uavPos[i, 0] > self.positionStart and u_t[i, 0] == -self.vBack:
+                    u[i, :] = u_t[i, :]
+                elif uavPos[i, 1] <= self.positionStart and u_t[i, 0] == -self.vBack:
+                    if uavPos[i, 1] >= returnY[0]:
+                        u[i, :] = np.array([0, -self.vBack])
+                    else:
+                        u[i, :] = np.array([0, self.vBack])
+                elif uavPos[i, 0] <= self.positionStart and u_t[i, 1] == -self.vBack or u_t[i, 1] == self.vBack:
+                    u[i, :] = u_t[i, :]
+                    if uavPos[i, 1] <= returnY[2] and uavPos[i, 1] >= returnY[3]:
+                        u[i, :] = np.array([self.vMax, 0])
+                else:
+                    u[i, :] = np.array([self.vMax, nextPos[i, 1] - uavPos[i, 1]])
 
+                    if finishBatch[k] == 0:
+                        connIndex[i] = 1
+                    speed = np.linalg.norm(u[i, :])
+                    if speed > self.vMax:
+                        u[i, :] = self.vMax * u[i, :] / speed
+                    disturbance = 0
+                    if uavPos[i, 0] >= self.positionEnd - 1:
+                        disturbance = 0.1
+                    else:
+                        disturbance = 0.2
+
+                    if uavPos[i, 0] > mid[k] + disturbance:
+                        u[i, 0] = 0.3 * self.vMax
+                    else:
+                        u[i, 0] = self.vMax
+                if j < minUavNum[k]:
+                    j += 1
+                else:
+                    j = 1
+                    k += 1
+            else:
+                u[i, :] = np.array([0, 0])
+        return u, connIndex
 
 
     def getGraphData(self, positions):
         result = np.zeros((self.n*3, 2))
         result[:self.n, :] = positions.copy()
         self.updateShadow(result)
-
         self.updateConnect(result)
+        result = np.vstack((result, self.batchPos))
         return result
