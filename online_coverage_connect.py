@@ -10,8 +10,8 @@ import matplotlib.patches as patches
 import time
 import argparse
 from multiprocessing import Queue
-from algorithms.connect_coverage.worker import Workers
-from algorithms.connect_coverage.master import Master
+from algorithms.angle_coverage.worker import Workers
+from algorithms.angle_coverage.master import Master
 
 # if python3
 # time.clock = time.time
@@ -52,7 +52,7 @@ if not args.local:
 
 # 读取无人机位置配置
 # with open("stable_angle_coverage_control/crazyfiles.yaml", "r") as f:
-with open("crazyfiles.yaml", "r") as f:
+with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
@@ -123,7 +123,9 @@ if __name__ == '__main__':
 
     n = len(allCrazyFlies)
     positions = np.zeros((n*3, 2))
-    agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+    connectPos = np.zeros((24, 2))
+    agentHandle = plt.scatter(positions[:n*3, 0], positions[:n*3, 1], marker=">", edgecolors="blue", c="white")
+    connectHandle = plt.scatter(positions[n*3:, 0], positions[n*3:, 1], marker=">", edgecolors="red", c="white")
     angles = np.array([np.pi for _ in range(n*3)])
 
     # 覆盖扇面作图
@@ -168,7 +170,8 @@ if __name__ == '__main__':
             # angles[n:2*n] = np.pi + np.arctan((circleY +10 - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
             # angles[2*n:3*n] = np.pi + np.arctan((circleY - 10 - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
 
-            agentHandle.set_offsets(positions)
+            agentHandle.set_offsets(positions[:n*3])
+            connectHandle.set_offsets(positions[n*3:])
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
             # for idx, angle in enumerate(angles):

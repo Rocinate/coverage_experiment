@@ -2,4 +2,5 @@
 record.txt
 sim.txt
 origin.json
+.vscode
 __pycache__
