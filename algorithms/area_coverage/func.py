@@ -2,10 +2,12 @@
 #!/usr/bin/env python
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+import matplotlib.path as mpltPath
+from borderdVoronoi import Vor
 np.random.seed(42)
 
 class Func:
-    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon):
+    def __init__(self, positionStart, positionEnd, angleStart, angleEnd, radius, vMax, cov, delta, epsilon, box):
         self.positionStart = positionStart
         self.positionEnd = positionEnd
         self.angleStart = angleStart
@@ -15,82 +17,43 @@ class Func:
         self.cov = cov
         self.delta = delta
         self.epsilon = epsilon
+        self.box = box
+        self.vor = Vor(box)
+        self.field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  # 导入信号场数据
 
-    # agentPos: 智能体位置信息，第一列x，第二列y
-    # ueHisY: 历史控制量
-    # agentAngles: 智能体朝向
-    # angles: 扇面角度
-    # angleStart: 限定角度
-    # angleEnd: 限定角度
-    # radius： 连通半径
-    # radarPos: 雷达位置
-    # vMax: 最大速度限制
-    # cov: 角度覆盖范围，通常为2°
-    def ccangle(self, agentPos, angles, ueHisY, agentAngles):
-        # 智能体数目
-        n = agentPos.shape[0]
-        ue = np.zeros(n)
-        bestAngle = np.zeros(n)
+    # 覆盖控制
+    def con_control(self, position):
+        # 维诺划分
+        vor = self.vor.voronoi(position)
+        posList = np.array([position[key] for key in position])
+        Idlist = list(position.keys())
+        # 创建字典用来存储ue，但由于维诺划分不能保证区域的顺序与无人机的编号顺序相同,因此需要通过字典的key来匹配
+        ue = {K:[0,0] for K in Idlist}
 
-        # 限制智能体角度范围
-        lessIndex = angles < self.angleStart
-        largerIndex = angles > self.angleEnd
-        bestAngle[lessIndex] = self.angleStart + self.cov / 2
-        bestAngle[largerIndex] = self.angleEnd - self.cov / 2
+        # 遍历维诺区域
+        for region in vor.filtered_regions:
+            vertices = vor.vertices[region + [region[0]], :]
+            path = mpltPath.Path(vertices)
 
-        # 得到距离矩阵
-        distMatrix = squareform(pdist(agentPos, 'euclidean'))
+            # 判断是哪一个无人机在当前的维诺划分区域内，并返回该无人机位置的索引值
+            index = np.where(path.contains_points(posList))[0][0]
+            flightIndex = Idlist[index]
 
-        # 未赋值，说明智能体角度在限制范围内
-        for index, value in enumerate(bestAngle):
-            if value == 0:
-                # 获取邻居距离
-                distConnected = distMatrix[index, :]
-                connectedIndex = np.where(distConnected <= self.radius)[0]
-                # print(angles)
-                # 取出邻居朝向角
-                angleList = [self.angleStart, self.angleEnd] + \
-                    angles[connectedIndex].tolist()
-                angleList = np.array(sorted(angleList))
+            # 维诺范围内场强点
+            index = np.where(path.contains_points(self.field_strength[:, :2]))[0][0]
+            cover_field = self.field_strength[index, :]
 
-                indexPos = np.where(angleList == angles[index])[0][0]
-                bestAngle[index] = (
-                    angleList[indexPos - 1] + angleList[indexPos + 1]) / 2
-        # 影响程度受距离的影响，距离雷达越近，通常的影响越小
-        beta = 0.1
-        gamma = 0.01
-        gradient = (gamma - beta) / (self.positionEnd - self.positionStart)
-        intercept = beta - self.positionStart * gradient
+            # 计算当前区域的维诺质心
+            Cx,Cy = self.vor.centroid_region(cover_field)
+            # Xrange, Yrange = self.box[1], self.box[3]
 
-        alpha = gradient * agentPos[:, 0] + intercept
-        sameTrendIndex = ueHisY * (angles - bestAngle) >= 0
+            # 计算质心是否在当前划分范围内？？？
+            # if inpolygon(Cx,Cy,bounding_vertices):
+            ue_x = Cx - position[flightIndex][0]
+            ue_y = Cy - position[flightIndex][1]
+            ue[flightIndex] = np.array([ue_x, ue_y])
 
-        ue[sameTrendIndex] = ueHisY[sameTrendIndex] + alpha[sameTrendIndex] * \
-            (angles[sameTrendIndex] - bestAngle[sameTrendIndex])
-        # 相反运动趋势
-        ue[~sameTrendIndex] = -ueHisY[~sameTrendIndex] + alpha[~sameTrendIndex] * \
-            (angles[~sameTrendIndex] - bestAngle[~sameTrendIndex])
-        temp = np.abs(ue)
-        # 取最小值
-        temp[temp > self.vMax] = self.vMax
-        ue = np.sign(ue) * temp
-        # print(ue[:, 1])
-
-        # 保证无人机相邻时刻转角的幅度在pi/12之内
-        angleChangeIndex = np.abs(
-            np.arctan(ue/self.vMax) - agentAngles) > np.pi / 30
-        # 符合条件
-        newAngle = agentAngles[angleChangeIndex] + np.sign(
-            angles[angleChangeIndex] - bestAngle[angleChangeIndex]) * np.pi / 30
-        ue[angleChangeIndex] = self.vMax * np.tan(newAngle)
-
-        # 保证无人机速度范围在-pi/3 ~ pi/3
-        lessIndex = np.arctan(ue / self.vMax) < -np.pi / 3
-        largerIndex = np.arctan(ue / self.vMax) > np.pi / 3
-
-        ue[lessIndex] = self.vMax * np.tan(-np.pi / 3)
-        ue[largerIndex] = self.vMax * np.tan(np.pi / 3)
-        return ue
+        return np.array(ue.values())
 
     # 定义计算拉普拉斯矩阵的函数
     # 输入：x为N*n的状态矩阵，N为智能体数量，n为状态维度；R为通信范围
@@ -148,9 +111,3 @@ class Func:
 
             uc[i, :] = np.array([ucx, ucy])
         return uc
-
-    
-
-    # 计算组间连通信息
-    def calcGroupConnectBatch(self, positions, targetPos, batchNum, damageIndex, returnY, u_t):
-        pass

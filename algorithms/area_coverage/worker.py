@@ -6,7 +6,7 @@ from enum import Enum
 import traceback # 错误堆栈
 
 # 自定义库
-from algorithms.connect_coverage.func import Func
+from algorithms.area_coverage.func import Func
 
 # 参数配置
 r = 2.0 # 雷达半径
@@ -24,7 +24,6 @@ epsilon = 0.1  # 最小代数连通度
 interval = 2.0 # 批次出发时间间隔
 vMax = 0.5  # 连通保持最大速度（用于限幅）
 vBack = 0.6 # 无人机返回速度
-brokenIndex = [5, 10]
 
 # 无人机状态枚举
 Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))
@@ -121,8 +120,6 @@ class Workers(Process):
 
     def inControl(self):
         epoch = self.epoch
-        # 判断无人机是否参与覆盖，参与赋值1，不参与覆盖
-        activate = np.array([True if status == Status.Cover else False for status in self.flightStatus])
 
         # 初始化局部变量，避免频繁访问self造成时间成本过高
         veAngle = np.zeros(self.n)
@@ -133,114 +130,42 @@ class Workers(Process):
         u_hx = np.zeros(self.n)
         u_hy = np.zeros(self.n)
 
-        # 仅有一个无人机在执行覆盖任务，直接前行
-        if sum(activate) < 2:
-            u_hx[activate] = vMax
+        self.updateLossConn()
+        # 连通控制量
+        ue = self.func.con_control(self.positions)
+
+        # 限幅
+
+
+        features = np.ones(self.n) * self.value[1]
+        featureVec = self.vectors[:, 1]
+        # 覆盖控制量
+        uc = self.func.con_pre(features, featureVec, self.positions, self.d, self.A)
+
+        # 限幅
+        for index in range(uc.shape[0]):
+            dist = np.linalg.norm(uc[index, :])
+            if dist > 1.2 * vMax:
+                uc[index, :] = 1.2 * vMax * uc[index, :] / dist
+
+        u = np.zeros(uc.shape)
+
+        if self.value[1] >= self.warnEpsilon:
+            u = ue[:]
         else:
-            self.updateLossConn()
-            # 只计算当前参与覆盖任务的无人机控制量
-            ue = self.func.ccangle(
-                self.positions[activate, :],
-                self.Angle_h[activate, epoch],
-                self.ue_hy[activate, epoch],
-                self.veAngle_h[activate, epoch])
+            if t % T == 0 and t <= 70:
+                total_ue = np.sum(ue, axis=0)
 
-            ue_hx[activate] = vMax
-            ue_hy[activate] = ue[:]
+                norm = np.linalg.norm(total_ue)
 
-            # 分段控制
-            features = np.ones(sum(activate)) * self.value[1]
-            featureVec = self.vectors[:, 1]
-            uc = self.func.con_pre(features, featureVec, self.positions[activate, :], self.d, self.A)
+                if norm  > 3 * vMax:
+                    total_ue = 3 * vMax * total_ue / norm
 
-            uc[:, 1] = 10 * uc[:, 1]
-            # 限幅
-            for index in range(uc.shape[0]):
-                dist = np.linalg.norm(uc[index, :])
-                if dist > vMax:
-                    uc[index, :] = vMax * uc[index, :] / dist
+                u = total_ue
+            else:
+                u = ue + uc
 
-            uc_hx[activate] = uc[:, 0]
-            uc_hy[activate] = uc[:, 1]
-
-            # 总控制，y轴方向
-            u_y = np.zeros(ue.shape)
-
-            # 防止倒飞
-            changeIndex = ue * (uc[:, 1] + ue) < 0
-            u_y[changeIndex] = ue[changeIndex]
-            u_y[~changeIndex] = (uc[~changeIndex, 1] + ue[~changeIndex])
-
-            # 控制率叠加
-            u_hx[activate] = vMax
-            u_hy[activate] = u_y
-
-            veAngle[activate] = np.real(np.arctan(u_hy[activate]/u_hx[activate]))
-
-        # 非覆盖任务的无人机控制量判断
-        for index, status in enumerate(self.flightStatus):
-            Px, Py = self.positions[index, :]
-            # 控制量为0，不更新任何信息
-            if status == Status.Stay:
-                pass
-            if index % 2 == 1 and status == Status.Back:
-                if Px < positionStart and Py <= 1.0:
-                    u_hx[index] = vBack
-                    u_hy[index] = 0
-                elif Px < positionStart and Py >= 1.0:
-                    u_hx[index] = 0
-                    u_hy[index] = -vBack
-                    veAngle[index] = -np.pi/2
-                elif Px >= positionEnd and Py < 2.0:
-                    u_hx[index] = 0
-                    u_hy[index] = vBack
-                    veAngle[index] = np.pi/2
-                elif Px >= positionEnd and Py >= 2.0:
-                    u_hx[index] = -vBack
-                    u_hy[index] = 0
-                    veAngle[index] = np.pi/2
-                elif Px >= positionStart and Py >= 2.0:
-                    u_hx[index] = -vBack
-                    u_hy[index] = 0
-                    veAngle[index] = np.pi
-            elif index % 2 == 0 and status == Status.Back:
-                if Px < positionStart and Py >= -1.0:
-                    u_hx[index] = vBack
-                    u_hy[index] = 0
-                elif Px < positionStart and Py <= -1.0:
-                    u_hx[index] = 0
-                    u_hy[index] = vBack
-                    veAngle[index] = -np.pi/2
-                elif Px >= positionEnd and Py > -2.0:
-                    u_hx[index] = 0
-                    u_hy[index] = -vBack
-                    veAngle[index] = np.pi/2
-                elif Px >= positionEnd and Py < -2.0:
-                    u_hx[index] = -vBack
-                    u_hy[index] = 0
-                    veAngle[index] = np.pi/2
-                elif Px > positionStart and Py <= -2.0:
-                    u_hx[index] = -vBack
-                    u_hy[index] = 0
-                    veAngle[index] = np.pi
-
-        # 更新历史记录
-        self.uc_hy[:, epoch + 1] = uc_hy
-        self.uc_hx[:, epoch + 1] = uc_hx
-        self.ue_hx[:, epoch + 1] = ue_hx
-        self.ue_hy[:, epoch + 1] = ue_hy
-        self.u_hx[:, epoch + 1] = u_hx
-        self.u_hy[:, epoch + 1] = u_hy
-        self.veAngle_h[:, epoch + 1] = veAngle
-
-        # 更新无人机位置
-        self.Px_h[:, epoch + 1] = self.Px_h[:, epoch] + self.u_hx[:, epoch + 1] * self.dt
-        self.Py_h[:, epoch + 1] = self.Py_h[:, epoch] + self.u_hy[:, epoch + 1] * self.dt
-        self.Angle_h[:, epoch + 1] = np.pi + np.arctan(
-            (circleY - self.Py_h[:, epoch + 1]) / (circleX - self.Px_h[:, epoch + 1]))
-
-        self.positions[:, 0] = self.Px_h[:, epoch + 1]
-        self.positions[:, 1] = self.Py_h[:, epoch + 1]
+        position, waypinsts = matchPoints(position, u)
 
         # 发布对应无人机执行情况
         for k in range(self.n):
@@ -250,31 +175,10 @@ class Workers(Process):
                 "Py": Py,
                 "Id": self.IdList[k],
                 "index": epoch,
-                "ux": u_hx[k],
-                "uy": u_hy[k],
-                "uz": -0.3 if self.flightStatus[k] == status.Broken else 0
+                "ux": u[k, 0],
+                "uy": u[k, 1],
+                "uz": 0
             })
-
-    # 状态转移
-    def updateStatus(self):
-        for index in range(self.n):
-            # 计算无人机开始飞行的时间节点
-            startEpoch = (index % self.n) * interval / self.dt
-
-            # 获取当前实时位置
-            Px, Py = self.positions[index]
-
-            # 无人机由静止开始覆盖任务
-            if self.flightStatus[index] == Status.Stay and self.epoch >= startEpoch:
-                self.flightStatus[index] = Status.Back
-            # 无人机由覆盖开始返回
-            elif self.flightStatus[index] == Status.Cover and Px > positionEnd:
-                self.flightStatus[index] = Status.Back
-            # 已返回覆盖区域
-            elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.0 and Py > -2.0:
-                self.flightStatus[index] = Status.Cover
-            elif self.flightStatus[index] == Status.Cover and self.epoch > 500 and index in brokenIndex:
-                self.flightStatus[index] = Status.Broken
 
 
     def run(self):
@@ -282,8 +186,6 @@ class Workers(Process):
         try:
             # 对每个批次无人机单独进行运算
             while self.epoch < self.epochNum-1:
-                # 更新任务状态
-                self.updateStatus()
 
                 # 更具任务状态分配任务
                 self.inControl()

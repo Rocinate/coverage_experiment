@@ -148,9 +148,3 @@ class Func:
 
             uc[i, :] = np.array([ucx, ucy])
         return uc
-
-    
-
-    # 计算组间连通信息
-    def calcGroupConnectBatch(self, positions, targetPos, batchNum, damageIndex, returnY, u_t):
-        pass
