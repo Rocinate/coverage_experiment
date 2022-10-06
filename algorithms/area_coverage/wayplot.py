@@ -28,8 +28,6 @@ def way_plot(xlist,ylist,data,bounding_box):
     plt.plot(xlist ,ylist,'ko')
     plt.pause(0.01)                # 暂停0.001秒
 
-    
-
 
 
 

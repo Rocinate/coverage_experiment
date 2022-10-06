@@ -5,8 +5,6 @@ from scipy.spatial.transform import Rotation
 import numpy as np
 import traceback  # 错误堆栈
 
-# 镜像雷达间隔
-gutter = 10
 
 class Master(Process):
     def __init__(self, name, res: Queue, graphPipeLine: Queue, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs=None, timeHelper=None):

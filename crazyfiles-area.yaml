@@ -3,71 +3,47 @@ files:
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - -1.0
+  - -0.2
+  - 3.0
 - Id: 2
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - -0.5
+  - 0.2
+  - 3.0
 - Id: 3
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - -1.5
+  - -0.2
+  - 2.7
 - Id: 4
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - 0.0
+  - 0.2
+  - 2.7
 - Id: 5
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - 0.5
+  - 0.6
+  - 2.4
 - Id: 6
   Pose: 0.0
   Batch: 1
   Position:
-  - -2.6
-  - 1.0
+  - 0.3
+  - 2.4
 - Id: 7
   Pose: 0.0
   Batch: 2
   Position:
-  - -3.0
-  - -1.0
+  - -0.3
+  - 2.4
 - Id: 8
   Pose: 0.0
   Batch: 2
   Position:
-  - -3.0
-  - -0.5
-- Id: 9
-  Pose: 0.0
-  Batch: 2
-  Position:
-  - -3.0
-  - 0.0
-- Id: 10
-  Pose: 0.0
-  Batch: 2
-  Position:
-  - -3.0
-  - 0.5
-- Id: 11
-  Pose: 0.0
-  Batch: 2
-  Position:
-  - -3.0
-  - 1.0
-- Id: 12
-  Pose: 0.0
-  Batch: 2
-  Position:
-  - -3.0
-  - 1.5
+  - -0.6
+  - 2.4

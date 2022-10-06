@@ -6,9 +6,10 @@ import pickle
 import yaml
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import matplotlib.patches as patches
-import time
 import argparse
+from scipy import interpolate
 from multiprocessing import Queue
 from algorithms.area_coverage.worker import Workers
 from algorithms.area_coverage.master import Master
@@ -30,6 +31,15 @@ positionEnd = 3.0
 kPosition = 1.
 totalTime = 80.
 epochNum = int(np.floor(totalTime / dt))
+
+xRange_min = -3.2  # 场地长度
+xRange_max = 3.8
+yRange_min = -3.2
+yRange_max = 3.8
+
+box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
+
+warnEpsilon = 0.6
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -65,6 +75,9 @@ def startCrazySwarm():
     return allcfs, timeHelper
 
 if __name__ == '__main__':
+    # 导入信号场数据
+    field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+
     allWaypoints = []
 
     # --load从本地文件直接读取路径结果
@@ -75,7 +88,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, warnEpsilon)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -103,9 +116,6 @@ if __name__ == '__main__':
 
     _, ax = plt.subplots(figsize=(8,12))
 
-    intNum = 20  # 覆盖扇面插值数
-    angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
-
     epoch = 0
     # 动态绘图
     plt.ion()
@@ -115,8 +125,14 @@ if __name__ == '__main__':
 
     n = len(allCrazyFlies)
     positions = np.zeros((n, 2))
-    connectPos = np.zeros((24, 2))
     agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+
+    # 绘制场强背景图
+    grid_x, grid_y = np.mgrid[box[0]:box[1]:500j, box[2]:box[3]:500j]
+    f = interpolate.griddata(field_strength[:, :2], field_strength[:,2], (grid_x, grid_y), method='linear')
+    colors=["magenta","blueviolet","royalblue","aqua","springgreen","greenyellow","yellow","orangered","red","white"]
+    clrmap=mcolors.LinearSegmentedColormap.from_list("mycmap",colors)
+    plt.pcolor(grid_x,grid_y,f,cmap=clrmap)
 
     plt.show()
 
@@ -127,7 +143,7 @@ if __name__ == '__main__':
             epoch += 1
 
             # 获取了所有无人机的位置信息，进行图像更新
-            agentHandle.set_offsets(positions[:n])
+            agentHandle.set_offsets(positions)
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
             plt.pause(0.000000000001)
