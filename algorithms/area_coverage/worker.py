@@ -8,28 +8,15 @@ import traceback # 错误堆栈
 # 自定义库
 from algorithms.area_coverage.func import Func
 
-# 参数配置
-r = 2.0 # 雷达半径
-circleX, circleY = 6.0, 0.0  # 雷达中心
-angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 5/180*np.pi  # 单机覆盖角度
-# 覆盖范围
-positionStart = -2.5
-positionEnd = 3.0
-
 # 参数设置
-R = 10  # 通信半径
+R = 25  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-interval = 2.0 # 批次出发时间间隔
-vMax = 0.5  # 连通保持最大速度（用于限幅）
-vBack = 0.6 # 无人机返回速度
-
-# 无人机状态枚举
-Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))
+vMax = 0.1  # 连通保持最大速度（用于限幅）
+warnEpsilon = 0.6 # 连通度警戒值
 
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, warnEpsilon):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box):
         Process.__init__(self)
         self.res = res
         self.name = name
@@ -37,7 +24,7 @@ class Workers(Process):
         self.dt = dt
         self.epochNum = epochNum
         self.getParams(allCrazyFlies)
-        self.func = Func(positionStart, positionEnd, R, vMax, delta, epsilon, box, field_strength)
+        self.func = Func(R, vMax, delta, epsilon, box, field_strength)
         self.warnEpsilon = warnEpsilon
 
     # 从配置文件中解析无人机相关参数
@@ -46,14 +33,8 @@ class Workers(Process):
 
         self.n = len(self.IdList) # 无人机数量
 
-        # 批次无人机状态
-        self.flightStatus = [Status.Stay] * len(allCrazyFlies)
-
         # 转换为numpy数组
         self.positions = np.array([item['Position'] for item in allCrazyFlies])
-
-        # 计算角度信
-        self.angles = np.pi + np.arctan((circleY - self.positions[:, 1]) / (circleX - self.positions[:, 0]))
 
     # 更新损失和连通度
     def updateLossConn(self):
@@ -77,6 +58,10 @@ class Workers(Process):
         self.updateLossConn()
         # 连通控制量
         ue = self.func.con_control(self.positions)
+        for index in range(ue.shape[0]):
+            dist = np.linalg.norm(ue[index, :])
+            if dist > vMax:
+                ue[index, :] = vMax * ue[index, :] / dist
 
         features = np.ones(self.n) * self.value[1]
         featureVec = self.vectors[:, 1]
@@ -94,7 +79,7 @@ class Workers(Process):
         critical = self.func.is_Critical_robot(self.d, 0.7)
 
         for flightIndex in range(u.shape[0]):
-            if self.features[1] <= self.warnEpsilon:
+            if self.value[1] <= self.warnEpsilon:
                 if critical[flightIndex]:
                     u[flightIndex] = ue[flightIndex] + uc[flightIndex]
                 else:
@@ -102,7 +87,7 @@ class Workers(Process):
             else:
                 u[flightIndex] = ue[flightIndex]
 
-        self.positions = self.positions + u
+        self.positions += u * self.dt
 
         # 发布对应无人机执行情况
         for k in range(self.n):

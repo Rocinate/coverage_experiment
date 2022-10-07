@@ -173,7 +173,7 @@ if __name__ == "__main__":
         time_h.append(t)   
 
     # 计算 ue
-        ue = con_control(Position,box,radar)       
+        ue = con_control(Position,box,radar)
         #限幅处理
         for i in Idlist:
              ue_norm = np.linalg.norm(ue[i])

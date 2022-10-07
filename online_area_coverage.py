@@ -19,14 +19,8 @@ from algorithms.area_coverage.master import Master
 
 # 飞行参数
 Z = 0.5 # 高度
-dt = 0.1 # 控制器更新频率
+dt = 1.0 # 控制器更新频率
 
-# 参数配置
-r = 2.0 # 雷达半径
-radarGutter = 10 # 镜像雷达位置
-# 覆盖范围
-positionStart = -2.5
-positionEnd = 3.0
 # 修正系数
 kPosition = 1.
 totalTime = 80.
@@ -38,8 +32,6 @@ yRange_min = -3.2
 yRange_max = 3.8
 
 box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
-
-warnEpsilon = 0.6
 
 # 添加路径
 currentUrl = os.path.dirname(__file__)
@@ -88,7 +80,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, warnEpsilon)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -114,18 +106,14 @@ if __name__ == '__main__':
     master.daemon = True
     master.start()
 
-    _, ax = plt.subplots(figsize=(8,12))
+    _, ax = plt.subplots(figsize=(4, 3))
 
     epoch = 0
     # 动态绘图
     plt.ion()
     titleHandle = plt.title("UAVs track epoch " + str(epoch))
-    plt.xlim([-5, 10])
-    plt.ylim([-15, 15])
-
-    n = len(allCrazyFlies)
-    positions = np.zeros((n, 2))
-    agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+    plt.xlim([xRange_min, xRange_max])
+    plt.ylim([yRange_min, yRange_max])
 
     # 绘制场强背景图
     grid_x, grid_y = np.mgrid[box[0]:box[1]:500j, box[2]:box[3]:500j]
@@ -133,6 +121,10 @@ if __name__ == '__main__':
     colors=["magenta","blueviolet","royalblue","aqua","springgreen","greenyellow","yellow","orangered","red","white"]
     clrmap=mcolors.LinearSegmentedColormap.from_list("mycmap",colors)
     plt.pcolor(grid_x,grid_y,f,cmap=clrmap)
+
+    n = len(allCrazyFlies)
+    positions = np.zeros((n, 2))
+    agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
 
     plt.show()
 
@@ -146,6 +138,6 @@ if __name__ == '__main__':
             agentHandle.set_offsets(positions)
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-            plt.pause(0.000000000001)
+            plt.pause(0.01)
     plt.ioff()
     plt.show()

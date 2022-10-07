@@ -7,9 +7,7 @@ from algorithms.area_coverage.borderdVoronoi import Vor
 np.random.seed(42)
 
 class Func:
-    def __init__(self, positionStart, positionEnd, radius, vMax, delta, epsilon, box, field_strength):
-        self.positionStart = positionStart
-        self.positionEnd = positionEnd
+    def __init__(self, radius, vMax, delta, epsilon, box, field_strength):
         self.radius = radius
         self.vMax = vMax
         self.delta = delta
@@ -32,20 +30,15 @@ class Func:
 
             # 判断是哪一个无人机在当前的维诺划分区域内，并返回该无人机位置的索引值
             flightIndex = np.where(path.contains_points(position))[0][0]
-            # flightIndex = Idlist[index]
 
             # 维诺范围内场强点
             index = np.where(path.contains_points(self.field_strength[:, :2]))[0]
             cover_field = self.field_strength[index, :]
 
-
-
             # 计算当前区域的维诺质心
             Cx, Cy = self.vor.centroid_region(cover_field)
-            # Xrange, Yrange = self.box[1], self.box[3]
 
-            # 计算质心是否在当前划分范围内？？？
-            # if inpolygon(Cx,Cy,bounding_vertices):
+            # 计算质心是否在当前划分范围内部
             ue_x = Cx - position[flightIndex][0]
             ue_y = Cy - position[flightIndex][1]
             ue[flightIndex] = np.array([ue_x, ue_y])
@@ -121,9 +114,27 @@ class Func:
         for index in range(n):
             a = 0
             # 远邻索引
-            farNeighbor = (d[index, :] > threshold) and (d[index, :] <= self.radius)
+            farNeighbor = np.bitwise_and(d[index, :] > threshold, d[index, :] <= self.radius)
             if len(d[index, farNeighbor]) == 0:
                 flag[index] = 0
             else:
-                # farNeighbour
-                pass
+                # 远邻
+                ind_if = np.where(farNeighbor)[0]
+                # 近邻
+                ind_in = np.where(d[index, :] <= threshold)[0]
+
+                for ifIndex in ind_if:
+                    for inIndex in ind_in:
+                        ind_ck = np.where(d[inIndex, :] <= threshold)[0]
+
+                        if ifIndex in ind_ck:
+                            a += 1
+                            break
+
+                if a == len(ind_if):
+                    flag[index] = 0
+
+        return flag
+
+
+

@@ -5,7 +5,6 @@ from scipy.spatial.transform import Rotation
 import numpy as np
 import traceback  # 错误堆栈
 
-
 class Master(Process):
     def __init__(self, name, res: Queue, graphPipeLine: Queue, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs=None, timeHelper=None):
         Process.__init__(self)
@@ -94,7 +93,7 @@ class Master(Process):
                         executeNumber = 0
 
                         # 返回位置信息，用于绘图
-                        self.graphPipeLine.put(positions)
+                        self.graphPipeLine.put(positions.copy())
 
             # 执行完毕，停止飞机
             self.publish and self.stop()
