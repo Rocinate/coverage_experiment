@@ -1,8 +1,8 @@
 # -*- coding: UTF-8 -*-
 #!/usr/bin/env python
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from scipy.spatial.transform import Rotation
-from algorithms.connect_coverage.shadow import Shadow
+from algorithms.angle_coverage.shadow import Shadow
 import numpy as np
 import traceback  # 错误堆栈
 
@@ -10,7 +10,7 @@ import traceback  # 错误堆栈
 gutter = 10
 
 class Master(Process):
-    def __init__(self, name, res: Queue, graphPipeLine: Queue, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs=None, timeHelper=None):
+    def __init__(self, name, res, graphPipeLine, allCrazyFlies, dt, Z, kPosition, epochNum, Crazyswarm = None):
         Process.__init__(self)
         self.epoch = 0
         self.epochNum = epochNum
@@ -23,12 +23,18 @@ class Master(Process):
         # 修正系数
         self.kPosition = kPosition
         self.shadow = Shadow(dt, gutter, len(self.allCrazyFlies))
-        self.allcfs = allcfs
-        self.timeHelper = timeHelper
         self.framRate = 1.0 / self.dt
-        self.publish = True if allcfs != None else False
+        self.Crazyswarm = Crazyswarm
+        self.publish = True if Crazyswarm != None else False
 
     def init(self):
+        # 创建无人机实例
+        swarm = self.Crazyswarm()
+        timeHelper = swarm.timeHelper
+        allcfs = swarm.allcfs
+
+        self.allcfs = allcfs
+        self.timeHelper = timeHelper
         # 所有无人机同时起飞
         self.allcfs.takeoff(targetHeight=self.Z, duration=1.0)
         # 等待2秒
@@ -49,10 +55,11 @@ class Master(Process):
             positions = np.zeros((n, 2))
 
             # 起飞✈
-            # self.publish and self.init()
+            self.publish and self.init()
 
             while self.epoch < self.epochNum - 1:
                 if not self.res.empty():
+                    
                     waypoint = self.res.get()
                     # 取出实际位置和速度
                     vx = waypoint['ux']

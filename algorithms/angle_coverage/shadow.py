@@ -1,4 +1,5 @@
-from turtle import position
+# -*- coding: UTF-8 -*-
+#!/usr/bin/env python
 import numpy as np
 np.random.seed(42)
 
@@ -54,7 +55,7 @@ class Shadow:
         diff1 = np.random.rand(self.n, 2)
         diff1[:, 0] = diff1[:, 0] / 2
         diff2 = np.random.rand(self.n, 2)
-        diff2[:, 0] = diff1[:, 0] / 2
+        diff2[:, 0] = diff2[:, 0] / 2
         self.diff1, self.diff2 = diff1, diff2
 
     # 计算影子信息
@@ -71,9 +72,9 @@ class Shadow:
             positions[flightIndex, 1] = self.gutter*2 - positions[flightIndex, 1]
 
         for flightIndex in range(2*n, 3*n):
-            positions[flightIndex, 0] = -16/121 * positions[flightIndex, 0]**2 + \
-                8/121 * positions[flightIndex, 0] + \
-                1 + positions[flightIndex, 0]
+            positions[flightIndex, 0] = -16.0/121 * positions[flightIndex, 0]**2 + \
+                8.0/121 * positions[flightIndex, 0] + \
+                1.0 + positions[flightIndex, 0]
             positions[flightIndex, 1] = positions[flightIndex, 1]
 
     def updateConnect(self):
@@ -81,10 +82,10 @@ class Shadow:
         u1, _ = self.calcGroupConnectBatch(self.batchPos[0, :, :], self.radarPos[0:2, :], self.batchNum, self.damageIndex[0], self.returnY[0], self.u_t[0, :, :])
         self.batchPos[0, :, :] += u1 * self.dt
         self.u_t[0, :, :] = u1
+        # 生成下半部分
         u2, _ = self.calcGroupConnectBatch(self.batchPos[1, :, :], self.radarPos[1:3, :], self.batchNum, self.damageIndex[1], self.returnY[1], self.u_t[1, :, :])
         self.batchPos[1, :, :] += u2 * self.dt
         self.u_t[1, :, :] = u2
-        # 生成下班部分
 
     def calcGroupConnectBatch(self, uavPos, radarPos, batchNum, damageIndex, returnY, u_t):
         num = uavPos.shape[0]

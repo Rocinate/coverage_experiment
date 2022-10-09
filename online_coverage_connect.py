@@ -51,21 +51,13 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-# with open("stable_angle_coverage_control/crazyfiles.yaml", "r") as f:
-with open("crazyfiles-angle.yaml", "r") as f:
+with open("350W/crazyfiles-angle.yaml", "r") as f:
+# with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
 # 实验参数
 STOP = False
-
-def startCrazySwarm():
-    # 创建无人机实例
-    swarm = Crazyswarm()
-    timeHelper = swarm.timeHelper
-    allcfs = swarm.allcfs
-
-    return allcfs, timeHelper
 
 if __name__ == '__main__':
     allWaypoints = []
@@ -94,10 +86,8 @@ if __name__ == '__main__':
 
     # 启动发布线程
     if not args.local:
-        # 与无人机集群建立联系，读取初始化信息
-        allcfs, timeHelper = startCrazySwarm()
         # 新建线程，进行消息发布管理
-        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, allcfs, timeHelper)
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, Crazyswarm)
     else:
         master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum)
 

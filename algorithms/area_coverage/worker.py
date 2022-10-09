@@ -2,7 +2,6 @@
 #!/usr/bin/env python
 from multiprocessing import Process
 import numpy as np
-from enum import Enum
 import traceback # 错误堆栈
 
 # 自定义库
@@ -16,7 +15,7 @@ vMax = 0.1  # 连通保持最大速度（用于限幅）
 warnEpsilon = 0.6 # 连通度警戒值
 
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, realFlightNum):
         Process.__init__(self)
         self.res = res
         self.name = name
@@ -26,6 +25,7 @@ class Workers(Process):
         self.getParams(allCrazyFlies)
         self.func = Func(R, vMax, delta, epsilon, box, field_strength)
         self.warnEpsilon = warnEpsilon
+        self.realFlightNum = realFlightNum
 
     # 从配置文件中解析无人机相关参数
     def getParams(self, allCrazyFlies):
@@ -90,7 +90,7 @@ class Workers(Process):
         self.positions += u * self.dt
 
         # 发布对应无人机执行情况
-        for k in range(self.n):
+        for k in range(self.realFlightNum):
             Px, Py = self.positions[k, :]
             self.res.put({
                 "Px": Px,
@@ -101,7 +101,6 @@ class Workers(Process):
                 "uy": u[k, 1],
                 "uz": 0
             })
-
 
     def run(self):
         print("start calculating!")
