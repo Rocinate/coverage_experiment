@@ -4,3 +4,4 @@ sim.txt
 origin.json
 .vscode
 __pycache__
+output.*
