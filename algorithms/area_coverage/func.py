@@ -33,15 +33,20 @@ class Func:
 
             # 维诺范围内场强点
             index = np.where(path.contains_points(self.field_strength[:, :2]))[0]
-            cover_field = self.field_strength[index, :]
 
-            # 计算当前区域的维诺质心
-            Cx, Cy = self.vor.centroid_region(cover_field)
+            # 所在维诺区域没有离散场强点
+            if len(index) == 0:
+                ue[flightIndex] = np.array([0.0, 0.0])
+            else:
+                cover_field = self.field_strength[index, :]
 
-            # 计算质心是否在当前划分范围内部
-            ue_x = Cx - position[flightIndex][0]
-            ue_y = Cy - position[flightIndex][1]
-            ue[flightIndex] = np.array([ue_x, ue_y])
+                # 计算当前区域的维诺质心
+                Cx, Cy = self.vor.centroid_region(cover_field)
+
+                # 计算质心是否在当前划分范围内部
+                ue_x = Cx - position[flightIndex][0]
+                ue_y = Cy - position[flightIndex][1]
+                ue[flightIndex] = np.array([ue_x, ue_y])
 
         return ue
 

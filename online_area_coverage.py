@@ -7,7 +7,6 @@ import yaml
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import matplotlib.patches as patches
 import argparse
 from scipy import interpolate
 from multiprocessing import Queue
@@ -31,13 +30,16 @@ epochNum = int(np.floor(totalTime / dt))
 # yRange_min = -3.2
 # yRange_max = 3.8
 
+# 欲覆盖范围
 xRange_min = -3.2  # 场地长度
-xRange_max = 3.8
+xRange_max = -3.2 + 20
 yRange_min = -3.2
-yRange_max = 3.8
+yRange_max = -3.2 + 20
 
-realFlightNum = 12
-guardFlightNum = 16
+flightNumConfig = {
+    "real": 12,
+    "guard": 8
+}
 
 box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
 
@@ -63,12 +65,10 @@ with open("crazyfiles-area.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
-# 实验参数
-STOP = False
-
 if __name__ == '__main__':
     # 导入信号场数据
-    field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+    # field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+    field_strength = np.loadtxt(open('./devTools/field_strength.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
 
     allWaypoints = []
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, realFlightNum)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         process.start()
@@ -99,9 +99,9 @@ if __name__ == '__main__':
         # 与无人机集群建立联系，读取初始化信息
         allcfs, timeHelper = startCrazySwarm()
         # 新建线程，进行消息发布管理
-        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, Crazyswarm)
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, flightNumConfig, Crazyswarm)
     else:
-        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum)
+        master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, flightNumConfig)
 
     master.daemon = True
     master.start()

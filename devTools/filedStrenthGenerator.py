@@ -7,10 +7,9 @@ if __name__ == '__main__':
     data *= 1e7
     result = []
 
-    for indexX, posX in enumerate(np.linspace(-10, 10, 30)):
-        for indexY, posY in enumerate(np.linspace(-10, 10, 30)):
-            result.append(",".join([str(round(posX, 2)), str(round(posY, 2)), str(data[indexX*33, indexY*33])]) + "\n")
+    for indexX, posX in enumerate(np.linspace(-3.2, -3.2 + 15, 100)):
+        for indexY, posY in enumerate(np.linspace(-3.2, -3.2 + 15, 100)):
+            result.append(",".join([str(round(posX, 2)), str(round(posY, 2)), str(data[indexX*10, indexY*10])]) + "\n")
 
     with open("field_strength.csv", 'w') as f:
         f.writelines(result)
-

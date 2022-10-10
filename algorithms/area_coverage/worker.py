@@ -12,20 +12,21 @@ R = 25  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
 vMax = 0.1  # 连通保持最大速度（用于限幅）
+virtualVMax = 0.5 # 虚拟联通保持最大速度
 warnEpsilon = 0.6 # 连通度警戒值
 
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, realFlightNum):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig):
         Process.__init__(self)
         self.res = res
         self.name = name
         self.epoch = 0
         self.dt = dt
         self.epochNum = epochNum
+        self.flightNumConfig = flightNumConfig
         self.getParams(allCrazyFlies)
         self.func = Func(R, vMax, delta, epsilon, box, field_strength)
         self.warnEpsilon = warnEpsilon
-        self.realFlightNum = realFlightNum
 
     # 从配置文件中解析无人机相关参数
     def getParams(self, allCrazyFlies):
@@ -35,6 +36,11 @@ class Workers(Process):
 
         # 转换为numpy数组
         self.positions = np.array([item['Position'] for item in allCrazyFlies])
+
+        # 获取非边界智能体索引
+        notGuardIndex = np.ones(self.n)
+        notGuardIndex[self.flightNumConfig['real']:self.flightNumConfig['real'] + self.flightNumConfig['guard']] = 0
+        self.notGuardIndex = notGuardIndex.astype(np.bool)
 
     # 更新损失和连通度
     def updateLossConn(self):
@@ -58,10 +64,17 @@ class Workers(Process):
         self.updateLossConn()
         # 连通控制量
         ue = self.func.con_control(self.positions)
-        for index in range(ue.shape[0]):
+        for index in range(self.flightNumConfig['real']):
             dist = np.linalg.norm(ue[index, :])
             if dist > vMax:
                 ue[index, :] = vMax * ue[index, :] / dist
+
+        # 计算边缘飞机索引
+        guardIndex = self.flightNumConfig['real']+self.flightNumConfig['guard']
+        for index in range(guardIndex, self.n):
+            dist = np.linalg.norm(ue[index, :])
+            if dist > virtualVMax:
+                ue[index, :] = virtualVMax * ue[index, :] / dist
 
         features = np.ones(self.n) * self.value[1]
         featureVec = self.vectors[:, 1]
@@ -73,6 +86,11 @@ class Workers(Process):
             dist = np.linalg.norm(uc[index, :])
             if dist > vMax:
                 uc[index, :] = vMax * uc[index, :] / dist
+
+        for index in range(guardIndex, self.n):
+            dist = np.linalg.norm(uc[index, :])
+            if dist > virtualVMax:
+                ue[index, :] = virtualVMax * uc[index, :] / dist
 
         u = np.zeros(uc.shape)
 
@@ -87,10 +105,12 @@ class Workers(Process):
             else:
                 u[flightIndex] = ue[flightIndex]
 
-        self.positions += u * self.dt
 
-        # 发布对应无人机执行情况
-        for k in range(self.realFlightNum):
+        # 仅更新非边界智能体
+        self.positions[self.notGuardIndex] += u[self.notGuardIndex] * self.dt
+
+        # 发布智能体执行情况
+        for k in range(self.n):
             Px, Py = self.positions[k, :]
             self.res.put({
                 "Px": Px,

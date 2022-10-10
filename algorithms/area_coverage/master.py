@@ -6,7 +6,7 @@ import numpy as np
 import traceback  # 错误堆栈
 
 class Master(Process):
-    def __init__(self, name, res, graphPipeLine, allCrazyFlies, dt, Z, kPosition, epochNum, Crazyswarm = None):
+    def __init__(self, name, res, graphPipeLine, allCrazyFlies, dt, Z, kPosition, epochNum, flightNumConfig, Crazyswarm = None):
         Process.__init__(self)
         self.epoch = 0
         self.epochNum = epochNum
@@ -21,6 +21,7 @@ class Master(Process):
         self.framRate = 1.0 / self.dt
         self.Crazyswarm = Crazyswarm
         self.publish = True if Crazyswarm != None else False
+        self.flightNumConfig = flightNumConfig
 
     def init(self):
         # 创建无人机实例
@@ -63,10 +64,9 @@ class Master(Process):
                     # 信息储存
                     positions[executeNumber, 0] = waypoint['Px']
                     positions[executeNumber, 1] = waypoint['Py']
-                    executeNumber += 1
 
                     # 指令广播
-                    if self.publish:
+                    if self.publish and executeNumber < self.flightNumConfig['real']:
                         # 获取对应ID的无人机控制器实例positions
                         cf = self.allcfsDict[waypoint['Id']]
 
@@ -93,6 +93,7 @@ class Master(Process):
                         else:
                             cf.cmdStop()
 
+                    executeNumber += 1
                     if executeNumber == n:
                         self.publish and self.timeHelper.sleepForRate(self.framRate)
                         self.epoch += 1
