@@ -38,9 +38,10 @@ class Workers(Process):
         self.positions = np.array([item['Position'] for item in allCrazyFlies])
 
         # 获取非边界智能体索引
-        notGuardIndex = np.ones(self.n)
-        notGuardIndex[self.flightNumConfig['real']:self.flightNumConfig['real'] + self.flightNumConfig['guard']] = 0
-        self.notGuardIndex = notGuardIndex.astype(np.bool)
+        notGuard = np.ones(self.n)
+        notGuard[self.flightNumConfig['real']:self.flightNumConfig['real'] + self.flightNumConfig['guard']] = 0
+        self.notGuard = notGuard.astype(np.bool)
+        self.notGuardIndex = np.array([index for index, flag in enumerate(self.notGuard) if flag])
 
     # 更新损失和连通度
     def updateLossConn(self):
@@ -107,18 +108,19 @@ class Workers(Process):
 
 
         # 仅更新非边界智能体
-        self.positions[self.notGuardIndex] += u[self.notGuardIndex] * self.dt
+        self.positions[self.notGuard] += u[self.notGuard] * self.dt
 
         # 发布智能体执行情况
-        for k in range(self.n):
-            Px, Py = self.positions[k, :]
+        for index in self.notGuardIndex:
+            # if flag:
+            Px, Py = self.positions[index, :]
             self.res.put({
                 "Px": Px,
                 "Py": Py,
-                "Id": self.IdList[k],
+                "Id": self.IdList[index],
                 "index": epoch,
-                "ux": u[k, 0],
-                "uy": u[k, 1],
+                "ux": u[index, 0],
+                "uy": u[index, 1],
                 "uz": 0
             })
 

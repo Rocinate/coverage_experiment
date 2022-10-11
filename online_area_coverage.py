@@ -22,7 +22,7 @@ dt = 1.0 # 控制器更新频率
 
 # 修正系数
 kPosition = 1.
-totalTime = 80.
+totalTime = 150.
 epochNum = int(np.floor(totalTime / dt))
 
 # xRange_min = -3.2  # 场地长度
@@ -32,13 +32,13 @@ epochNum = int(np.floor(totalTime / dt))
 
 # 欲覆盖范围
 xRange_min = -3.2  # 场地长度
-xRange_max = -3.2 + 20
+xRange_max = 10.0
 yRange_min = -3.2
-yRange_max = -3.2 + 20
+yRange_max = 10.0
 
 flightNumConfig = {
     "real": 12,
-    "guard": 8
+    "guard": 14
 }
 
 box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
@@ -68,7 +68,7 @@ allCrazyFlies = data['files']
 if __name__ == '__main__':
     # 导入信号场数据
     # field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
-    field_strength = np.loadtxt(open('./devTools/field_strength.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
 
     allWaypoints = []
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     plt.pcolor(grid_x,grid_y,f,cmap=clrmap)
 
     n = len(allCrazyFlies)
-    positions = np.zeros((n, 2))
+    positions = np.zeros((n-flightNumConfig['guard'], 2))
     agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
 
     plt.show()
@@ -134,8 +134,6 @@ if __name__ == '__main__':
             positions = graphStorage.get()
             epoch += 1
 
-            # 获取了所有无人机的位置信息，进行图像更新
-            # if (epoch == 1):
             agentHandle.set_offsets(positions)
 
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))

@@ -48,7 +48,7 @@ class Master(Process):
             # 位置信息暂存，收集完毕后通过graphPipeLine发送给绘图线程
             n = len(self.allCrazyFlies)
 
-            positions = np.zeros((n, 2))
+            positions = np.zeros((n-self.flightNumConfig['guard'], 2))
 
             # 起飞✈
             self.publish and self.init()
@@ -94,7 +94,7 @@ class Master(Process):
                             cf.cmdStop()
 
                     executeNumber += 1
-                    if executeNumber == n:
+                    if executeNumber == n-self.flightNumConfig['guard']:
                         self.publish and self.timeHelper.sleepForRate(self.framRate)
                         self.epoch += 1
                         executeNumber = 0
