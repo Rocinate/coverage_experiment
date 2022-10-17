@@ -57,7 +57,7 @@ class Workers(Process):
         self.A = A
         self.d = d
 
-        print("时刻" + str(self.epoch)+ " 的连通度为" + str(self.value[1]))
+        print("时刻" + str(self.epoch)+ " 的连通度为" + str(round(self.value[1], 2)))
 
     def inControl(self):
         epoch = self.epoch

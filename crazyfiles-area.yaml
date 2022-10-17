@@ -1,52 +1,52 @@
 files:
 - Id: 1
   Position:
-  - -3.0
+  - -2.0
   - 3.2
 - Id: 2
   Position:
-  - -2.5
+  - -1.5
   - 3.2
 - Id: 3
   Position:
-  - -2.0
+  - -1.0
   - 3.2
 - Id: 4
   Position:
-  - -1.5
+  - -0.5
   - 3.2
 - Id: 5
   Position:
-  - -1.0
+  - 0.0
   - 3.2
 - Id: 6
   Position:
-  - -0.5
+  - 0.5
   - 3.2
 - Id: 7
   Position:
-  - -3.0
-  - 3.0
+  - -2.0
+  - 2.9
 - Id: 8
   Position:
-  - -2.5
-  - 3.0
+  - -1.5
+  - 2.9
 - Id: 9
   Position:
-  - -2.0
-  - 3.0
+  - -1.0
+  - 2.9
 - Id: 10
   Position:
-  - -1.5
-  - 3.0
+  - -0.5
+  - 2.9
 - Id: 11
   Position:
-  - -1.0
-  - 3.0
+  - 0.0
+  - 2.9
 - Id: 12
   Position:
-  - -0.5
-  - 3.0
+  - 0.5
+  - 2.9
 - Id: 13
   Position:
   - 3.0

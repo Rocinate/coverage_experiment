@@ -22,7 +22,7 @@ dt = 1.0 # 控制器更新频率
 
 # 修正系数
 kPosition = 1.
-totalTime = 150.
+totalTime = 100.
 epochNum = int(np.floor(totalTime / dt))
 
 # xRange_min = -3.2  # 场地长度
@@ -60,15 +60,15 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-# with open("stable_angle_coverage_control/crazyfiles.yaml", "r") as f:
-with open("crazyfiles-area.yaml", "r") as f:
+with open("350W/crazyfiles-area.yaml", "r") as f:
+# with open("crazyfiles-area.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
 if __name__ == '__main__':
     # 导入信号场数据
     # field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
-    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
+    field_strength = np.loadtxt(open('./350W/devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
 
     allWaypoints = []
 
@@ -96,8 +96,6 @@ if __name__ == '__main__':
 
     # 启动发布线程
     if not args.local:
-        # 与无人机集群建立联系，读取初始化信息
-        allcfs, timeHelper = startCrazySwarm()
         # 新建线程，进行消息发布管理
         master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, flightNumConfig, Crazyswarm)
     else:

@@ -50,8 +50,8 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-# with open("350W/crazyfiles-angle.yaml", "r") as f:
-with open("crazyfiles-angle.yaml", "r") as f:
+with open("350W/crazyfiles-angle.yaml", "r") as f:
+# with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
