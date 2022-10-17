@@ -6,7 +6,6 @@ import pickle
 import yaml
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import time
 import argparse
 from multiprocessing import Queue
@@ -51,8 +50,8 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-with open("350W/crazyfiles-angle.yaml", "r") as f:
-# with open("crazyfiles-angle.yaml", "r") as f:
+# with open("350W/crazyfiles-angle.yaml", "r") as f:
+with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
@@ -110,6 +109,8 @@ if __name__ == '__main__':
     titleHandle = plt.title("UAVs track epoch " + str(epoch))
     plt.xlim([-5, 10])
     plt.ylim([-15, 15])
+    plt.plot([-5, 10], [-5, -5], 'b--')
+    plt.plot([-5, 10], [5, 5], 'b--')
 
     n = len(allCrazyFlies)
     positions = np.zeros((n*3, 2))

@@ -122,9 +122,15 @@ if __name__ == '__main__':
     clrmap=mcolors.LinearSegmentedColormap.from_list("mycmap",colors)
     plt.pcolor(grid_x,grid_y,f,cmap=clrmap)
 
+    plt.plot([-3.2,3.2], [3.8,3.8], 'b--')
+    plt.plot([3.2,3.2], [3.8,-3.8], 'b--')
+    plt.plot([-3.2,3.2], [-3.8,-3.8], 'b--')
+    plt.plot([-3.2,-3.2], [3.8,-3.8], 'b--')
+
     n = len(allCrazyFlies)
     positions = np.zeros((n-flightNumConfig['guard'], 2))
-    agentHandle = plt.scatter(positions[:, 0], positions[:, 1], marker=">", edgecolors="blue", c="white")
+    trueAgentHandle = plt.scatter(positions[:flightNumConfig["real"], 0], positions[:flightNumConfig["real"], 1], marker=">", edgecolors="blue", c="white")
+    fakeAgentHandle = plt.scatter(positions[-flightNumConfig["guard"]:, 0], positions[-flightNumConfig["guard"]:, 1], marker=">", edgecolors="blue", c="blue")
 
     plt.show()
 
@@ -134,7 +140,8 @@ if __name__ == '__main__':
             positions = graphStorage.get()
             epoch += 1
 
-            agentHandle.set_offsets(positions)
+            trueAgentHandle.set_offsets(positions[:flightNumConfig["real"]])
+            fakeAgentHandle.set_offsets(positions[-flightNumConfig["guard"]:])
 
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
