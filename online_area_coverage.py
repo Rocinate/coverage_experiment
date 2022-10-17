@@ -36,10 +36,6 @@ xRange_max = 10.0
 yRange_min = -3.2
 yRange_max = 10.0
 
-flightNumConfig = {
-    "real": 12,
-    "guard": 14
-}
 
 box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
 
@@ -64,6 +60,12 @@ with open("350W/crazyfiles-area.yaml", "r") as f:
 # with open("crazyfiles-area.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
+
+flightNumConfig = {
+    "real": 12,
+    "guard": 14,
+    "virtual": len(allCrazyFlies) - 12 -14
+}
 
 if __name__ == '__main__':
     # 导入信号场数据
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     n = len(allCrazyFlies)
     positions = np.zeros((n-flightNumConfig['guard'], 2))
     trueAgentHandle = plt.scatter(positions[:flightNumConfig["real"], 0], positions[:flightNumConfig["real"], 1], marker=">", edgecolors="blue", c="white")
-    fakeAgentHandle = plt.scatter(positions[-flightNumConfig["guard"]:, 0], positions[-flightNumConfig["guard"]:, 1], marker=">", edgecolors="blue", c="blue")
+    fakeAgentHandle = plt.scatter(positions[-flightNumConfig["virtual"]:, 0], positions[-flightNumConfig["virtual"]:, 1], marker=">", edgecolors="blue", c="blue")
 
     plt.show()
 
@@ -139,7 +141,7 @@ if __name__ == '__main__':
             epoch += 1
 
             trueAgentHandle.set_offsets(positions[:flightNumConfig["real"]])
-            fakeAgentHandle.set_offsets(positions[-flightNumConfig["guard"]:])
+            fakeAgentHandle.set_offsets(positions[-flightNumConfig["virtual"]:])
 
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
