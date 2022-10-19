@@ -8,12 +8,12 @@ import traceback # 错误堆栈
 from algorithms.area_coverage.func import Func
 
 # 参数设置
-R = 25  # 通信半径
+R = 4.5  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
-vMax = 0.1  # 连通保持最大速度（用于限幅）
-virtualVMax = 0.5 # 虚拟联通保持最大速度
-warnEpsilon = 0.6 # 连通度警戒值
+vMax = 0.5  # 连通保持最大速度（用于限幅）
+virtualVMax = 1.0 # 虚拟联通保持最大速度
+warnEpsilon = 0.8 # 连通度警戒值
 
 class Workers(Process):
     def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig):
@@ -27,6 +27,7 @@ class Workers(Process):
         self.getParams(allCrazyFlies)
         self.func = Func(R, vMax, delta, epsilon, box, field_strength)
         self.warnEpsilon = warnEpsilon
+        self.minConnect = 9999
 
     # 从配置文件中解析无人机相关参数
     def getParams(self, allCrazyFlies):
@@ -58,6 +59,8 @@ class Workers(Process):
         self.d = d
 
         print("时刻" + str(self.epoch)+ " 的连通度为" + str(round(self.value[1], 2)))
+
+        self.minConnect = self.minConnect if self.value[1] > self.minConnect else self.value[1]
 
     def inControl(self):
         epoch = self.epoch
@@ -93,18 +96,20 @@ class Workers(Process):
             if dist > virtualVMax:
                 ue[index, :] = virtualVMax * uc[index, :] / dist
 
+        # 
         u = np.zeros(uc.shape)
+        u = ue
 
-        critical = self.func.is_Critical_robot(self.d, 0.7)
+        # critical = self.func.is_Critical_robot(self.d, 0.7)
 
-        for flightIndex in range(u.shape[0]):
-            if self.value[1] <= self.warnEpsilon:
-                if critical[flightIndex]:
-                    u[flightIndex] = ue[flightIndex] + uc[flightIndex]
-                else:
-                    u[flightIndex] = ue[flightIndex] + 0.8 * uc[flightIndex]
-            else:
-                u[flightIndex] = ue[flightIndex]
+        # for flightIndex in range(u.shape[0]):
+        #     if self.value[1] <= self.warnEpsilon:
+        #         if critical[flightIndex]:
+        #             u[flightIndex] = 0.6*ue[flightIndex] + uc[flightIndex]
+        #         else:
+        #             u[flightIndex] = ue[flightIndex] + 0.5 * uc[flightIndex]
+        #     else:
+        #         u[flightIndex] = ue[flightIndex]
 
 
         # 仅更新非边界智能体
@@ -134,5 +139,10 @@ class Workers(Process):
                 self.inControl()
 
                 self.epoch += 1
+            if self.minConnect > 0:
+                print( "集群运行过程中最小连通度为" + str(round(self.minConnect, 2))+ ", 拓扑保持连通，满足指标要求")
+            else:
+                print( "集群运行过程中最小连通度为" + str(round(self.minConnect, 2)))
+
         except Exception as e:
             print(traceback.print_exc()) # debug exception

@@ -24,8 +24,8 @@ epsilon = 0.1  # 最小代数连通度
 interval = 2.0 # 批次出发时间间隔
 vMax = 0.5  # 连通保持最大速度（用于限幅）
 vBack = 0.6 # 无人机返回速度
-# brokenIndex = [5, 10]
-brokenIndex = []
+brokenIndex = [5, 10]
+# brokenIndex = []
 
 # 无人机状态枚举
 Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))

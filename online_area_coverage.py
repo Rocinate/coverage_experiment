@@ -18,7 +18,7 @@ from algorithms.area_coverage.master import Master
 
 # 飞行参数
 Z = 0.5 # 高度
-dt = 1.0 # 控制器更新频率
+dt = 0.2 # 控制器更新频率
 
 # 修正系数
 kPosition = 1.
@@ -35,7 +35,6 @@ xRange_min = -3.2  # 场地长度
 xRange_max = 10.0
 yRange_min = -3.2
 yRange_max = 10.0
-
 
 box = np.array([xRange_min, xRange_max, yRange_min, yRange_max])  # 场地范围
 
@@ -145,6 +144,6 @@ if __name__ == '__main__':
 
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-            plt.pause(0.01)
+            plt.pause(0.0000001)
     plt.ioff()
     plt.show()
