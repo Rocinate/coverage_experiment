@@ -19,6 +19,7 @@ from algorithms.area_coverage.master import Master
 # 飞行参数
 Z = 0.5 # 高度
 dt = 0.2 # 控制器更新频率
+step = 5 # 画图函数
 
 # 修正系数
 kPosition = 1.
@@ -145,11 +146,12 @@ if __name__ == '__main__':
             positions = graphStorage.get()
             epoch += 1
 
-            trueAgentHandle.set_offsets(positions[:flightNumConfig["real"]])
-            fakeAgentHandle.set_offsets(positions[-flightNumConfig["virtual"]:])
+            if(epoch % step == 0):
+                trueAgentHandle.set_offsets(positions[:flightNumConfig["real"]])
+                fakeAgentHandle.set_offsets(positions[-flightNumConfig["virtual"]:])
 
-            plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
+                plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-            plt.pause(0.0000001)
+                plt.pause(0.0000001)
     plt.ioff()
     plt.show()

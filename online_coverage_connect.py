@@ -19,6 +19,7 @@ from algorithms.angle_coverage.master import Master
 # 飞行参数
 Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
+step = 5 # 画图函数
 
 # 参数配置
 r = 2.0 # 雷达半径
@@ -180,37 +181,38 @@ if __name__ == '__main__':
             positions = graphStorage.get()
             epoch += 1
 
-            # 获取了所有无人机的位置信息，进行图像更新
-            angles[:n] = np.pi + np.arctan((circleY - positions[:n, 1]) / (circleX - positions[:n, 0]))
-            angles[n:2*n] = np.pi + np.arctan((circleY + radarGutter - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
-            angles[2*n:3*n] = np.pi + np.arctan((circleY - radarGutter - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
+            if epoch % step == 0:
+                # 获取了所有无人机的位置信息，进行图像更新
+                angles[:n] = np.pi + np.arctan((circleY - positions[:n, 1]) / (circleX - positions[:n, 0]))
+                angles[n:2*n] = np.pi + np.arctan((circleY + radarGutter - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
+                angles[2*n:3*n] = np.pi + np.arctan((circleY - radarGutter - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
 
-            agentHandle.set_offsets(positions[:n*3])
-            connectHandle.set_offsets(positions[n*3:])
-            plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
+                agentHandle.set_offsets(positions[:n*3])
+                connectHandle.set_offsets(positions[n*3:])
+                plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-            for idx, angle in enumerate(angles):
-                if angle < angleEnd and angle > angleStart and idx < n:
-                    path = [
-                        [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
-                        [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
-                        [circleX, circleY]
-                    ]
-                    plt.setp(verHandle[idx], xy=path)
-                if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
-                    path = [
-                        [circleX + r * np.cos(angle - cov/4*3), circleY + radarGutter+ r * np.sin(angle - cov/4*3)],
-                        [circleX + r * np.cos(angle + cov/4*3), circleY + radarGutter+ r * np.sin(angle + cov/4*3)],
-                        [circleX, circleY+radarGutter]
-                    ]
-                    plt.setp(verHandle[idx], xy=path)
-                if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
-                    path = [
-                        [circleX + r * np.cos(angle - cov/4*3), circleY - radarGutter+ r * np.sin(angle - cov/4*3)],
-                        [circleX + r * np.cos(angle + cov/4*3), circleY - radarGutter+ r * np.sin(angle + cov/4*3)],
-                        [circleX, circleY-radarGutter]
-                    ]
-                    plt.setp(verHandle[idx], xy=path)
-            plt.pause(0.000000000001)
+                for idx, angle in enumerate(angles):
+                    if angle < angleEnd and angle > angleStart and idx < n:
+                        path = [
+                            [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
+                            [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
+                            [circleX, circleY]
+                        ]
+                        plt.setp(verHandle[idx], xy=path)
+                    if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
+                        path = [
+                            [circleX + r * np.cos(angle - cov/4*3), circleY + radarGutter+ r * np.sin(angle - cov/4*3)],
+                            [circleX + r * np.cos(angle + cov/4*3), circleY + radarGutter+ r * np.sin(angle + cov/4*3)],
+                            [circleX, circleY+radarGutter]
+                        ]
+                        plt.setp(verHandle[idx], xy=path)
+                    if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
+                        path = [
+                            [circleX + r * np.cos(angle - cov/4*3), circleY - radarGutter+ r * np.sin(angle - cov/4*3)],
+                            [circleX + r * np.cos(angle + cov/4*3), circleY - radarGutter+ r * np.sin(angle + cov/4*3)],
+                            [circleX, circleY-radarGutter]
+                        ]
+                        plt.setp(verHandle[idx], xy=path)
+                plt.pause(0.000000000001)
     plt.ioff()
     plt.show()
