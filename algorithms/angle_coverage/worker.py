@@ -24,20 +24,18 @@ epsilon = 0.1  # 最小代数连通度
 interval = 2.0 # 批次出发时间间隔
 vMax = 0.5  # 连通保持最大速度（用于限幅）
 vBack = 0.6 # 无人机返回速度
-brokenIndex = [5, 10]
-# brokenIndex = []
 
 # 无人机状态枚举
 Status = Enum("Status", ("Stay", "Cover", "Back", "Broken"))
-
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, epochNum):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum, brokenIndex):
         Process.__init__(self)
         self.res = res
         self.name = name
         self.epoch = 0
         self.dt = dt
         self.epochNum = epochNum
+        self.brokenIndex = brokenIndex
         self.getParams(allCrazyFlies)
         self.func = Func(positionStart, positionEnd, angleStart, angleEnd, 
         R, vMax, cov, delta, epsilon)
@@ -253,7 +251,8 @@ class Workers(Process):
                 "index": epoch,
                 "ux": u_hx[k],
                 "uy": u_hy[k],
-                "uz": -0.3 if self.flightStatus[k] == status.Broken else 0
+                "uz": -0.3 if self.flightStatus[k] == status.Broken else 0,
+                "status": self.flightStatus[k]
             })
 
     # 状态转移
@@ -274,7 +273,7 @@ class Workers(Process):
             # 已返回覆盖区域
             elif self.flightStatus[index] == Status.Back and Px >= positionStart and Px <= positionEnd and Py < 2.0 and Py > -2.0:
                 self.flightStatus[index] = Status.Cover
-            elif self.flightStatus[index] == Status.Cover and self.epoch > 500 and index in brokenIndex:
+            elif self.flightStatus[index] == Status.Cover and self.epoch > 500 and index in self.brokenIndex:
                 self.flightStatus[index] = Status.Broken
 
 
@@ -290,5 +289,6 @@ class Workers(Process):
                 self.inControl()
 
                 self.epoch += 1
+
         except Exception as e:
             print(traceback.print_exc()) # debug exception

@@ -53,7 +53,7 @@ class Master(Process):
             # 起飞✈
             self.publish and self.init()
 
-            while self.epoch < self.epochNum - 1:
+            while self.epoch < self.epochNum:
                 if not self.res.empty():
                     waypoint = self.res.get()
                     # 取出实际位置和速度
@@ -102,6 +102,10 @@ class Master(Process):
                         # 返回位置信息，用于绘图
                         self.graphPipeLine.put(positions.copy())
 
+            while self.res.empty():
+                pass
+
+            self.graphPipeLine.put(self.res.get())
             # 执行完毕，停止飞机
             self.publish and self.stop()
         except Exception as e:

@@ -19,7 +19,9 @@ from algorithms.angle_coverage.master import Master
 # 飞行参数
 Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
-step =2 # 画图函数
+step = 1 # 画图函数
+brokenIndex = [5, 10]
+# brokenIndex = []
 
 # 参数配置
 r = 2.0 # 雷达半径
@@ -72,7 +74,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        workerProcess = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum)
+        workerProcess = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, brokenIndex)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         workerProcess.daemon = True
         processList.insert(0, workerProcess)
@@ -119,7 +121,6 @@ if __name__ == '__main__':
 
     # 覆盖扇面作图
     verHandle = [None] * n * 3
-    # 扇形点位，添加起点保证图像闭合
 
     for index in range(n):
         # 初始化
@@ -174,9 +175,11 @@ if __name__ == '__main__':
 
     for handle in verHandle:
         handle.set_fc('b')
+        handle.set_edgecolor('b')
         handle.set_fill(True)
 
     plt.show()
+    time.sleep(5)
 
     # 启动线程，优先画图，不然会被运算卡住
     for process in processList:
@@ -198,6 +201,7 @@ if __name__ == '__main__':
                 connectHandle.set_offsets(positions[n*3:])
                 plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
+                # update all the angle
                 for idx, angle in enumerate(angles):
                     if angle < angleEnd and angle > angleStart and idx < n:
                         path = [
@@ -220,6 +224,14 @@ if __name__ == '__main__':
                             [circleX, circleY-radarGutter]
                         ]
                         plt.setp(verHandle[idx], xy=path)
-                plt.pause(0.000000000001)
+                    verHandle[idx].set_alpha(0.0)
+
+                for idx in range(n):
+                    if positions[idx][0] > positionStart and positions[idx][0] < positionEnd and not idx in brokenIndex:
+                        verHandle[idx].set_alpha(1.0)
+                        verHandle[idx+n].set_alpha(1.0)
+                        verHandle[idx+2*n].set_alpha(1.0)
+
+                plt.pause(dt/2)
     plt.ioff()
     plt.show()

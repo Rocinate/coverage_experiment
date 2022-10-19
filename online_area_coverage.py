@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import argparse
+import time
 from scipy import interpolate
 from multiprocessing import Queue
 from algorithms.area_coverage.worker import Workers
@@ -19,7 +20,7 @@ from algorithms.area_coverage.master import Master
 # 飞行参数
 Z = 0.5 # 高度
 dt = 0.2 # 控制器更新频率
-step = 5 # 画图函数
+step = 1 # 画图函数
 
 # 修正系数
 kPosition = 1.
@@ -136,13 +137,14 @@ if __name__ == '__main__':
     fakeAgentHandle = plt.scatter(positions[-flightNumConfig["virtual"]:, 0], positions[-flightNumConfig["virtual"]:, 1], marker=">", edgecolors="blue", c="blue")
 
     plt.show()
+    time.sleep(5)
 
     # 启动线程，优先画图
     for process in processList:
         process.start()
 
     # 初始化位置信息
-    while epoch < epochNum-1:
+    while epoch < epochNum:
         if not graphStorage.empty():
             positions = graphStorage.get()
             epoch += 1
@@ -153,6 +155,21 @@ if __name__ == '__main__':
 
                 plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-                plt.pause(0.0000001)
+                plt.pause(dt/2)
+    plt.show()
+
+    # 接收连通度历史
+    while graphStorage.empty():
+        pass
+
+    data = graphStorage.get()
+    print(data)
+
+    plt.figure()
+
+    plt.plot(data)
+    plt.xlabel("Epoch")
+    plt.ylabel("Algebraic Connectivity")
+    plt.title("Algebraic Connectivity Curve")
     plt.ioff()
     plt.show()

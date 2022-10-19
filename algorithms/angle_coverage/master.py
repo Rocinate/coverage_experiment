@@ -59,7 +59,6 @@ class Master(Process):
 
             while self.epoch < self.epochNum - 1:
                 if not self.res.empty():
-                    
                     waypoint = self.res.get()
                     # 取出实际位置和速度
                     vx = waypoint['ux']
@@ -106,8 +105,8 @@ class Master(Process):
 
                         # 生成影子信息，用于绘图
                         self.graphPipeLine.put(
-                            self.shadow.getGraphData(positions)
-                        )
+                                self.shadow.getGraphData(positions)
+                            )
 
             # 执行完毕，停止飞机
             self.publish and self.stop()

@@ -45,6 +45,9 @@ class Workers(Process):
         self.notGuard = notGuard.astype(np.bool)
         self.notGuardIndex = np.array([index for index, flag in enumerate(self.notGuard) if flag])
 
+        # 历史连通度
+        self.his = np.zeros(self.epochNum)
+
     # 更新损失和连通度
     def updateLossConn(self):
         L, A, d = self.func.L_Mat(self.positions)
@@ -59,6 +62,7 @@ class Workers(Process):
         self.A = A
         self.d = d
 
+        self.his[self.epoch] = self.value[1]
         print("时刻" + str(self.epoch)+ " 的连通度为" + str(round(self.value[1], 2)))
 
         self.minConnect = self.minConnect if self.value[1] > self.minConnect else self.value[1]
@@ -135,7 +139,7 @@ class Workers(Process):
         print("start calculating!")
         try:
             # 对每个批次无人机单独进行运算
-            while self.epoch < self.epochNum-1:
+            while self.epoch < self.epochNum:
 
                 # 更具任务状态分配任务
                 self.inControl()
@@ -145,6 +149,8 @@ class Workers(Process):
                 print( "集群运行过程中最小连通度为" + str(round(self.minConnect, 2))+ ", 拓扑保持连通，满足指标要求")
             else:
                 print( "集群运行过程中最小连通度为" + str(round(self.minConnect, 2)))
+
+            self.res.put(self.his.copy())
 
         except Exception as e:
             print(traceback.print_exc()) # debug exception
