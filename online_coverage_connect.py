@@ -51,8 +51,8 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-with open("350W/crazyfiles-angle.yaml", "r") as f:
-# with open("crazyfiles-angle.yaml", "r") as f:
+# with open("350W/crazyfiles-angle.yaml", "r") as f:
+with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
@@ -61,6 +61,7 @@ STOP = False
 
 if __name__ == '__main__':
     allWaypoints = []
+    processList = []
 
     # --load从本地文件直接读取路径结果
     if args.load:
@@ -70,10 +71,10 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum)
+        workerProcess = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
-        process.daemon = True
-        process.start()
+        workerProcess.daemon = True
+        processList.insert(0, workerProcess)
 
     # --record, 记录路径结果到本地txt文件，方便直接读取
     if args.record:
@@ -92,17 +93,12 @@ if __name__ == '__main__':
         master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum)
 
     master.daemon = True
-    master.start()
+    processList.insert(0, master)
 
     _, ax = plt.subplots(figsize=(8,12))
 
     intNum = 20  # 覆盖扇面插值数
     angleList = np.linspace(angleStart, angleEnd, intNum)  # 计算覆盖扇面位置,用于作图
-    # 扇形点位，添加起点保证图像闭合
-    # xList = [circleX] + [circleX + r *
-    #                     np.cos(angle) for angle in angleList] + [circleX]
-    # yList = [circleY] + [circleY + r *
-    #                     np.sin(angle) for angle in angleList] + [circleY]
 
     epoch = 0
     # 动态绘图
@@ -121,35 +117,62 @@ if __name__ == '__main__':
     angles = np.array([np.pi for _ in range(n*3)])
 
     # 覆盖扇面作图
-    # verHandle = [None] * n * 3
-    # for index in range(n):
-    #     # 初始化
-    #     patch = patches.Polygon([
-    #         [circleX + r * np.cos(np.pi-cov/2), circleY + r * np.sin(angles[index]-cov/2)],
-    #         [circleX + r * np.cos(np.pi+cov/2), circleY + r * np.sin(angles[index]+cov/2)],
-    #         [circleX, circleY]
-    #     ], fill=False)
-    #     verHandle[index] = ax.add_patch(patch)
+    verHandle = [None] * n * 3
+    # 扇形点位，添加起点保证图像闭合
 
-    # for index in range(n, 2*n):
-    #     # 初始化
-    #     patch = patches.Polygon([
-    #         [circleX + r * np.cos(np.pi-cov/2), circleY + 10 + r * np.sin(angles[index]-cov/2)],
-    #         [circleX + r * np.cos(np.pi+cov/2), circleY + 10 + r * np.sin(angles[index]+cov/2)],
-    #         [circleX, circleY]
-    #     ], fill=False)
-    #     verHandle[index] = ax.add_patch(patch)
+    for index in range(n):
+        # 初始化
+        patch = patches.Polygon([
+            [circleX + r * np.cos(np.pi-cov/2), circleY + r * np.sin(angles[index]-cov/2)],
+            [circleX + r * np.cos(np.pi+cov/2), circleY + r * np.sin(angles[index]+cov/2)],
+            [circleX, circleY]
+        ], fill=False)
+        verHandle[index] = ax.add_patch(patch)
 
-    # for index in range(2*n, 3*n):
-    #     # 初始化
-    #     patch = patches.Polygon([
-    #         [circleX + r * np.cos(np.pi-cov/2), circleY -10 + r * np.sin(angles[index]-cov/2)],
-    #         [circleX + r * np.cos(np.pi+cov/2), circleY -10 + r * np.sin(angles[index]+cov/2)],
-    #         [circleX, circleY]
-    #     ], fill=False)
-    #     verHandle[index] = ax.add_patch(patch)
+    xList = [circleX] + [circleX + r *
+                        np.cos(angle) for angle in angleList] + [circleX]
+    yList = [circleY] + [circleY + r *
+                        np.sin(angle) for angle in angleList] + [circleY]
+    plt.plot(xList, yList, 'black')
+
+    for index in range(n, 2*n):
+        # 初始化
+        patch = patches.Polygon([
+            [circleX + r * np.cos(np.pi-cov/2), circleY + radarGutter + r * np.sin(angles[index]-cov/2)],
+            [circleX + r * np.cos(np.pi+cov/2), circleY + radarGutter + r * np.sin(angles[index]+cov/2)],
+            [circleX, circleY]
+        ], fill=False)
+        verHandle[index] = ax.add_patch(patch)
+
+    xList = [circleX] + [circleX + r *
+                        np.cos(angle) for angle in angleList] + [circleX]
+    yList = [circleY+radarGutter] + [circleY+radarGutter + r *
+                        np.sin(angle) for angle in angleList] + [circleY+radarGutter]
+    plt.plot(xList, yList, 'black')
+
+    for index in range(2*n, 3*n):
+        # 初始化
+        patch = patches.Polygon([
+            [circleX + r * np.cos(np.pi-cov/2), circleY - radarGutter + r * np.sin(angles[index]-cov/2)],
+            [circleX + r * np.cos(np.pi+cov/2), circleY - radarGutter + r * np.sin(angles[index]+cov/2)],
+            [circleX, circleY]
+        ], fill=False)
+        verHandle[index] = ax.add_patch(patch)
+    xList = [circleX] + [circleX + r *
+                        np.cos(angle) for angle in angleList] + [circleX]
+    yList = [circleY-radarGutter] + [circleY-radarGutter + r *
+                        np.sin(angle) for angle in angleList] + [circleY-radarGutter]
+    plt.plot(xList, yList, 'black')
+
+    for handle in verHandle:
+        handle.set_fc('b')
+        handle.set_fill(True)
 
     plt.show()
+
+    # 启动线程，优先画图，不然会被运算卡住
+    for process in processList:
+        process.start()
 
     # 初始化位置信息
     while epoch < epochNum-1:
@@ -158,36 +181,36 @@ if __name__ == '__main__':
             epoch += 1
 
             # 获取了所有无人机的位置信息，进行图像更新
-
-            # angles[n:2*n] = np.pi + np.arctan((circleY +10 - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
-            # angles[2*n:3*n] = np.pi + np.arctan((circleY - 10 - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
+            angles[:n] = np.pi + np.arctan((circleY - positions[:n, 1]) / (circleX - positions[:n, 0]))
+            angles[n:2*n] = np.pi + np.arctan((circleY + radarGutter - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
+            angles[2*n:3*n] = np.pi + np.arctan((circleY - radarGutter - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
 
             agentHandle.set_offsets(positions[:n*3])
             connectHandle.set_offsets(positions[n*3:])
             plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-            # for idx, angle in enumerate(angles):
-            #     if angle < angleEnd and angle > angleStart and idx < n:
-            #         path = [
-            #             [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
-            #             [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
-            #             [circleX, circleY]
-            #         ]
-            #         plt.setp(verHandle[idx], xy=path)
-            #     if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
-            #         path = [
-            #             [circleX + r * np.cos(angle - cov/2), circleY +10+ r * np.sin(angle - cov/2)],
-            #             [circleX + r * np.cos(angle + cov/2), circleY +10+ r * np.sin(angle + cov/2)],
-            #             [circleX, circleY+10]
-            #         ]
-            #         plt.setp(verHandle[idx], xy=path)
-            #     if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
-            #         path = [
-            #             [circleX + r * np.cos(angle - cov/2), circleY -10+ r * np.sin(angle - cov/2)],
-            #             [circleX + r * np.cos(angle + cov/2), circleY -10+ r * np.sin(angle + cov/2)],
-            #             [circleX, circleY-10]
-            #         ]
-            #         plt.setp(verHandle[idx], xy=path)
+            for idx, angle in enumerate(angles):
+                if angle < angleEnd and angle > angleStart and idx < n:
+                    path = [
+                        [circleX + r * np.cos(angle - cov/2), circleY + r * np.sin(angle - cov/2)],
+                        [circleX + r * np.cos(angle + cov/2), circleY + r * np.sin(angle + cov/2)],
+                        [circleX, circleY]
+                    ]
+                    plt.setp(verHandle[idx], xy=path)
+                if angle < angleEnd and angle > angleStart and idx >= n and idx < 2*n:
+                    path = [
+                        [circleX + r * np.cos(angle - cov/4*3), circleY + radarGutter+ r * np.sin(angle - cov/4*3)],
+                        [circleX + r * np.cos(angle + cov/4*3), circleY + radarGutter+ r * np.sin(angle + cov/4*3)],
+                        [circleX, circleY+radarGutter]
+                    ]
+                    plt.setp(verHandle[idx], xy=path)
+                if angle < angleEnd and angle > angleStart and idx >= 2*n and idx < 3*n:
+                    path = [
+                        [circleX + r * np.cos(angle - cov/4*3), circleY - radarGutter+ r * np.sin(angle - cov/4*3)],
+                        [circleX + r * np.cos(angle + cov/4*3), circleY - radarGutter+ r * np.sin(angle + cov/4*3)],
+                        [circleX, circleY-radarGutter]
+                    ]
+                    plt.setp(verHandle[idx], xy=path)
             plt.pause(0.000000000001)
     plt.ioff()
     plt.show()
