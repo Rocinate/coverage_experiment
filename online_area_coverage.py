@@ -48,6 +48,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--local", help="Run using local simulation.", action="store_true")
 parser.add_argument("--record", help="save the waypoints.", action="store_true")
 parser.add_argument("--load", help="load waypoints from record.", action="store_true")
+parser.add_argument("--noConnect", help="with connection.", action="store_true")
 args = parser.parse_args()
 
 if not args.local:
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     else:
         # allWaypoints = getWaypoint()
         resultStorage = Queue()
-        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig)
+        process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig, args.noConnect)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
         processList.insert(0, process)

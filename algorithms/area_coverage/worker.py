@@ -16,7 +16,7 @@ virtualVMax = 1.0 # 虚拟联通保持最大速度
 warnEpsilon = 0.8 # 连通度警戒值
 
 class Workers(Process):
-    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig):
+    def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig, noConnect):
         Process.__init__(self)
         self.res = res
         self.name = name
@@ -28,6 +28,7 @@ class Workers(Process):
         self.func = Func(R, vMax, delta, epsilon, box, field_strength)
         self.warnEpsilon = warnEpsilon
         self.minConnect = 9999
+        self.noConnect = noConnect
 
     # 从配置文件中解析无人机相关参数
     def getParams(self, allCrazyFlies):
@@ -96,21 +97,22 @@ class Workers(Process):
             if dist > virtualVMax:
                 ue[index, :] = virtualVMax * uc[index, :] / dist
 
-        # 
+        # 总控制率
         u = np.zeros(uc.shape)
-        u = ue
+        # 根据参数判断是否保持连通
+        if self.noConnect:
+            u = ue
+        else:
+            critical = self.func.is_Critical_robot(self.d, 0.7)
 
-        # critical = self.func.is_Critical_robot(self.d, 0.7)
-
-        # for flightIndex in range(u.shape[0]):
-        #     if self.value[1] <= self.warnEpsilon:
-        #         if critical[flightIndex]:
-        #             u[flightIndex] = 0.6*ue[flightIndex] + uc[flightIndex]
-        #         else:
-        #             u[flightIndex] = ue[flightIndex] + 0.5 * uc[flightIndex]
-        #     else:
-        #         u[flightIndex] = ue[flightIndex]
-
+            for flightIndex in range(u.shape[0]):
+                if self.value[1] <= self.warnEpsilon:
+                    if critical[flightIndex]:
+                        u[flightIndex] = 0.6*ue[flightIndex] + uc[flightIndex]
+                    else:
+                        u[flightIndex] = ue[flightIndex] + 0.5 * uc[flightIndex]
+                else:
+                    u[flightIndex] = ue[flightIndex]
 
         # 仅更新非边界智能体
         self.positions[self.notGuard] += u[self.notGuard] * self.dt
