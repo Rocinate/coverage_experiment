@@ -19,7 +19,7 @@ from algorithms.angle_coverage.master import Master
 # 飞行参数
 Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
-step = 5 # 画图函数
+step =2 # 画图函数
 
 # 参数配置
 r = 2.0 # 雷达半径
@@ -135,6 +135,13 @@ if __name__ == '__main__':
     yList = [circleY] + [circleY + r *
                         np.sin(angle) for angle in angleList] + [circleY]
     plt.plot(xList, yList, 'black')
+
+    circle1 = plt.Circle((circleX, circleY), r, color='y', fill=False)
+    circle2 = plt.Circle((circleX, circleY+radarGutter), r, color='y', fill=False)
+    circle3 = plt.Circle((circleX, circleY-radarGutter), r, color='y', fill=False)
+    ax.add_patch(circle1)
+    ax.add_patch(circle2)
+    ax.add_patch(circle3)
 
     for index in range(n, 2*n):
         # 初始化

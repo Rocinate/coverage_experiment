@@ -70,7 +70,7 @@ flightNumConfig = {
 
 if __name__ == '__main__':
     # 导入信号场数据
-    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
     # field_strength = np.loadtxt(open('./350W/devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
 
     allWaypoints = []
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     master.daemon = True
     processList.insert(0, master)
 
-    _, ax = plt.subplots(figsize=(4, 3))
+    _, ax = plt.subplots(figsize=(8, 6))
 
     epoch = 0
     # 动态绘图
@@ -120,9 +120,10 @@ if __name__ == '__main__':
     # 绘制场强背景图
     grid_x, grid_y = np.mgrid[box[0]:box[1]:500j, box[2]:box[3]:500j]
     f = interpolate.griddata(field_strength[:, :2], field_strength[:,2], (grid_x, grid_y), method='linear')
-    colors=["magenta","blueviolet","royalblue","aqua","springgreen","greenyellow","yellow","orangered","red","white"]
-    clrmap=mcolors.LinearSegmentedColormap.from_list("mycmap",colors)
-    plt.pcolor(grid_x,grid_y,f,cmap=clrmap)
+
+    f = (f-f.min()) / (f.max()-f.min())
+    im = plt.imshow(f.T, origin='lower', extent=box, cmap=plt.cm.Reds)
+    plt.colorbar(im)
 
     plt.plot([-3.2,3.2], [3.8,3.8], 'b--')
     plt.plot([3.2,3.2], [3.8,-3.8], 'b--')
