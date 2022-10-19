@@ -55,8 +55,8 @@ if not args.local:
     from pycrazyswarm import *
 
 # 读取无人机位置配置
-with open("350W/crazyfiles-area.yaml", "r") as f:
-# with open("crazyfiles-area.yaml", "r") as f:
+# with open("350W/crazyfiles-area.yaml", "r") as f:
+with open("crazyfiles-area.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
 
@@ -68,10 +68,11 @@ flightNumConfig = {
 
 if __name__ == '__main__':
     # 导入信号场数据
-    # field_strength = np.loadtxt(open('./algorithms/area_coverage/zhongchuang_0.5.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
-    field_strength = np.loadtxt(open('./350W/devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
+    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)  
+    # field_strength = np.loadtxt(open('./350W/devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
 
     allWaypoints = []
+    processList = []
 
     # --load从本地文件直接读取路径结果
     if args.load:
@@ -84,7 +85,7 @@ if __name__ == '__main__':
         process = Workers('Worker', resultStorage, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig)
         # 将进程设置为守护进程，当主程序结束时，守护进程会被强行终止
         process.daemon = True
-        process.start()
+        processList.insert(0, process)
 
     # --record, 记录路径结果到本地txt文件，方便直接读取
     if args.record:
@@ -103,7 +104,7 @@ if __name__ == '__main__':
         master = Master('Master', resultStorage, graphStorage, allCrazyFlies, dt, Z, kPosition, epochNum, flightNumConfig)
 
     master.daemon = True
-    master.start()
+    processList.insert(0, master)
 
     _, ax = plt.subplots(figsize=(4, 3))
 
@@ -132,6 +133,10 @@ if __name__ == '__main__':
     fakeAgentHandle = plt.scatter(positions[-flightNumConfig["virtual"]:, 0], positions[-flightNumConfig["virtual"]:, 1], marker=">", edgecolors="blue", c="blue")
 
     plt.show()
+
+    # 启动线程，优先画图
+    for process in processList:
+        process.start()
 
     # 初始化位置信息
     while epoch < epochNum-1:
