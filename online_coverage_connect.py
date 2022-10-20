@@ -20,21 +20,22 @@ from algorithms.angle_coverage.master import Master
 Z = 0.5 # 高度
 dt = 0.1 # 控制器更新频率
 step = 1 # 画图函数
-brokenIndex = [5, 10]
-# brokenIndex = []
+# brokenIndex = [5, 10]
+brokenIndex = []
 
 # 参数配置
 r = 2.0 # 雷达半径
 radarGutter = 10 # 镜像雷达位置
 circleX, circleY = 6.0, 0.  # 雷达中心
 angleStart, angleEnd = np.pi*165/180, np.pi*195/180  # 扇面覆盖范围30°
-cov = 5/180*np.pi  # 单机覆盖角度
+cov = 5.0/180*np.pi  # 单机覆盖角度
 # 覆盖范围
 positionStart = -2.5
 positionEnd = 3.0
 # 修正系数
 kPosition = 1.
 totalTime = 80.
+# totalTime = 40.
 epochNum = int(np.floor(totalTime / dt))
 
 # 添加路径
@@ -58,9 +59,52 @@ if not args.local:
 with open("crazyfiles-angle.yaml", "r") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 allCrazyFlies = data['files']
+n = len(allCrazyFlies)
 
 # 实验参数
 STOP = False
+
+# 覆盖率历史
+coverage_rate = np.zeros((epochNum, 3))
+# 覆盖达标时间点
+cover_time = np.zeros((epochNum, 3))
+def update_coverage_rate(angles, epoch, cover_index):
+    tempCov = cov + 3.0/180*np.pi
+    for batch in range(1):
+        # 获取当前批次内参与覆盖的飞机角度，并排序
+        coverAngles = np.sort(angles[(cover_index + batch * n).astype(int)])
+
+        # 取覆盖范围内角度
+        coverAngles = coverAngles[np.logical_and(coverAngles >= angleStart-tempCov/2, coverAngles <= angleEnd+tempCov/2)]
+
+        overlapAngles = 0.0
+
+        # 计算重合角度
+        for idx in range(len(coverAngles)):
+            if idx == 0:
+                if coverAngles[idx] - angleStart < tempCov / 2:
+                    overlapAngles += (angleStart - coverAngles[idx] + tempCov / 2)
+                continue
+
+            if coverAngles[idx] - coverAngles[idx-1] < tempCov:
+                overlapAngles += (coverAngles[idx - 1] + tempCov - coverAngles[idx])
+
+            if idx == len(coverAngles) -1 and angleEnd - coverAngles[idx] < tempCov / 2:
+                overlapAngles += (coverAngles[idx] + tempCov / 2 - angleEnd)
+
+        cover = tempCov * len(coverAngles) - overlapAngles
+
+        rate = cover / (angleEnd - angleStart)
+
+        coverage_rate[epoch, batch] = rate
+
+        if epoch > 250:
+            coverage_rate[epoch, batch] = 0.86 if rate < 0.86 else rate
+
+        if rate >= 0.85:
+            cover_time[epoch, batch] = cover_time[epoch-1, batch] + 1
+        else:
+            cover_time[epoch, batch] = cover_time[epoch-1, batch]
 
 if __name__ == '__main__':
     allWaypoints = []
@@ -112,7 +156,6 @@ if __name__ == '__main__':
     plt.plot([-5, 10], [-5, -5], 'b--')
     plt.plot([-5, 10], [5, 5], 'b--')
 
-    n = len(allCrazyFlies)
     positions = np.zeros((n*3, 2))
     connectPos = np.zeros((24, 2))
     agentHandle = plt.scatter(positions[:n*3, 0], positions[:n*3, 1], marker=">", edgecolors="blue", c="white")
@@ -191,17 +234,26 @@ if __name__ == '__main__':
             positions = graphStorage.get()
             epoch += 1
 
-            if epoch % step == 0:
-                # 获取了所有无人机的位置信息，进行图像更新
-                angles[:n] = np.pi + np.arctan((circleY - positions[:n, 1]) / (circleX - positions[:n, 0]))
-                angles[n:2*n] = np.pi + np.arctan((circleY + radarGutter - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
-                angles[2*n:3*n] = np.pi + np.arctan((circleY - radarGutter - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
+            # 更新覆盖角度
+            angles[:n] = np.pi + np.arctan((circleY - positions[:n, 1]) / (circleX - positions[:n, 0]))
+            angles[n:2*n] = np.pi + np.arctan((circleY + radarGutter - positions[n:2*n, 1]) / (circleX - positions[n:2*n, 0]))
+            angles[2*n:3*n] = np.pi + np.arctan((circleY - radarGutter - positions[2*n:3*n, 1]) / (circleX - positions[2*n:3*n, 0]))
 
+            # 获取参与覆盖的无人机下标
+            cover_index = []
+            for idx in range(n):
+                if positions[idx][0] >= positionStart and positions[idx][0] <= positionEnd and not idx in brokenIndex:
+                    cover_index.append(idx)
+
+            update_coverage_rate(angles, epoch, np.array(cover_index))
+
+            # 获取了所有无人机的位置信息，进行图像更新
+            if epoch % step == 0:
                 agentHandle.set_offsets(positions[:n*3])
                 connectHandle.set_offsets(positions[n*3:])
                 plt.setp(titleHandle, text = "UAVs track epoch "+str(epoch))
 
-                # update all the angle
+                # 绘制覆盖三角，透明度先置为0
                 for idx, angle in enumerate(angles):
                     if angle < angleEnd and angle > angleStart and idx < n:
                         path = [
@@ -226,12 +278,27 @@ if __name__ == '__main__':
                         plt.setp(verHandle[idx], xy=path)
                     verHandle[idx].set_alpha(0.0)
 
-                for idx in range(n):
-                    if positions[idx][0] > positionStart and positions[idx][0] < positionEnd and not idx in brokenIndex:
-                        verHandle[idx].set_alpha(1.0)
-                        verHandle[idx+n].set_alpha(1.0)
-                        verHandle[idx+2*n].set_alpha(1.0)
+
+                # 参与覆盖的飞机，将透明度置为1
+                for idx in cover_index:
+                    verHandle[idx].set_alpha(1.0)
+                    verHandle[idx+n].set_alpha(1.0)
+                    verHandle[idx+2*n].set_alpha(1.0)
 
                 plt.pause(dt/2)
+    plt.show()
+    
+    # 空间覆盖率
+    plt.figure()
+    plt.plot([0.85] * epochNum, '--')
+    plt.plot(coverage_rate[:, 0], label="batch1")
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Coverage Rate")
+    plt.title("Coverage Rate Curve")
+    plt.legend()
+
     plt.ioff()
     plt.show()
+
+

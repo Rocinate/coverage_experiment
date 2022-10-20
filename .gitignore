@@ -5,3 +5,4 @@ origin.json
 .vscode
 __pycache__
 output.*
+*.zip
