@@ -50,152 +50,76 @@ files:
 - Id: 13
   Position:
   - 3.0
-  - 3.0
+  - 3.8
 - Id: 14
   Position:
-  - 3.0
   - 2.0
+  - 3.8
 - Id: 15
   Position:
-  - 3.0
   - 1.0
+  - 3.8
 - Id: 16
   Position:
-  - 3.0
   - 0.0
+  - 3.8
 - Id: 17
   Position:
-  - 3.0
   - -1.0
+  - 3.8
 - Id: 18
   Position:
-  - 3.0
   - -2.0
+  - 3.8
 - Id: 19
   Position:
-  - 3.0
   - -3.0
+  - 3.8
 - Id: 20
   Position:
-  - 3.0
-  - 3.8
+  - -3.0
+  - 5.5
 - Id: 21
   Position:
-  - 2.0
-  - 3.8
+  - -2.5
+  - 5.5
 - Id: 22
   Position:
-  - 1.0
-  - 3.8
+  - -2.0
+  - 5.5
 - Id: 23
   Position:
-  - 0.0
-  - 3.8
+  - -1.5
+  - 5.5
 - Id: 24
   Position:
   - -1.0
-  - 3.8
+  - 5.5
 - Id: 25
   Position:
-  - -2.0
-  - 3.8
+  - -0.5
+  - 5.5
 - Id: 26
   Position:
   - -3.0
-  - 3.8
+  - 4.8
 - Id: 27
   Position:
-  - -3.0
-  - 5.5
+  - -2.5
+  - 4.8
 - Id: 28
   Position:
-  - -2.5
-  - 5.5
+  - -2.0
+  - 4.8
 - Id: 29
   Position:
-  - -2.0
-  - 5.5
+  - -1.5
+  - 4.8
 - Id: 30
   Position:
-  - -1.5
-  - 5.5
+  - -1.0
+  - 4.8
 - Id: 31
   Position:
-  - -1.0
-  - 5.5
-- Id: 32
-  Position:
-  - -0.5
-  - 5.5
-- Id: 33
-  Position:
-  - -3.0
-  - 4.8
-- Id: 34
-  Position:
-  - -2.5
-  - 4.8
-- Id: 35
-  Position:
-  - -2.0
-  - 4.8
-- Id: 36
-  Position:
-  - -1.5
-  - 4.8
-- Id: 37
-  Position:
-  - -1.0
-  - 4.8
-- Id: 38
-  Position:
   - -0.5
   - 4.8
-- Id: 39
-  Position:
-  - -3.0
-  - 5.5
-- Id: 40
-  Position:
-  - -2.5
-  - 5.5
-- Id: 41
-  Position:
-  - -2.0
-  - 5.5
-- Id: 42
-  Position:
-  - -1.5
-  - 5.5
-- Id: 43
-  Position:
-  - -1.0
-  - 5.5
-- Id: 44
-  Position:
-  - -0.5
-  - 5.5
-- Id: 45
-  Position:
-  - -3.0
-  - 6.0
-- Id: 46
-  Position:
-  - -2.5
-  - 6.0
-- Id: 47
-  Position:
-  - -2.0
-  - 6.0
-- Id: 48
-  Position:
-  - -1.5
-  - 6.0
-- Id: 49
-  Position:
-  - -1.0
-  - 6.0
-- Id: 50
-  Position:
-  - -0.5
-  - 6.0

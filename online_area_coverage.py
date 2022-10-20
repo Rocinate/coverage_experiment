@@ -24,7 +24,7 @@ step = 1 # 画图函数
 
 # 修正系数
 kPosition = 1.
-totalTime = 100.
+totalTime = 40.
 epochNum = int(np.floor(totalTime / dt))
 
 # xRange_min = -3.2  # 场地长度
@@ -34,7 +34,7 @@ epochNum = int(np.floor(totalTime / dt))
 
 # 欲覆盖范围
 xRange_min = -3.2  # 场地长度
-xRange_max = 10.0
+xRange_max = 3.8
 yRange_min = -3.2
 yRange_max = 10.0
 
@@ -65,15 +65,20 @@ allCrazyFlies = data['files']
 
 flightNumConfig = {
     "real": 12,
-    "guard": 14,
-    "virtual": len(allCrazyFlies) - 12 -14
+    "guard": 7,
+    "virtual": len(allCrazyFlies) - 12 -7
 }
 
 if __name__ == '__main__':
     # 导入信号场数据
-    field_strength = np.loadtxt(open('./devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
-    # field_strength = np.loadtxt(open('./350W/devTools/cq.csv'), delimiter=',', skiprows=0, dtype=np.float64)
-    
+    plot_strength = np.loadtxt(open('./devTools/noConnect.csv'), delimiter=',', skiprows=0, dtype=np.float64)
+    # plot_strength = np.loadtxt(open('./350W/devTools/noConnect.csv'), delimiter=',', skiprows=0, dtype=np.float64)
+
+    if args.noConnect:
+        field_strength = plot_strength
+    else:
+        field_strength = np.loadtxt(open('./devTools/connect.csv'), delimiter=',', skiprows=0, dtype=np.float64)
+        # plot_strength = np.loadtxt(open('./350W/devTools/connect.csv'), delimiter=',', skiprows=0, dtype=np.float64)
 
     allWaypoints = []
     processList = []
@@ -110,7 +115,7 @@ if __name__ == '__main__':
     master.daemon = True
     processList.insert(0, master)
 
-    _, ax = plt.subplots(figsize=(8, 6))
+    _, ax = plt.subplots(figsize=(4, 6))
 
     epoch = 0
     # 动态绘图
@@ -127,10 +132,10 @@ if __name__ == '__main__':
     im = plt.imshow(f.T, origin='lower', extent=box, cmap=plt.cm.Reds)
     plt.colorbar(im)
 
-    plt.plot([-3.2,3.2], [3.8,3.8], 'b--')
-    plt.plot([3.2,3.2], [3.8,-3.8], 'b--')
-    plt.plot([-3.2,3.2], [-3.8,-3.8], 'b--')
-    plt.plot([-3.2,-3.2], [3.8,-3.8], 'b--')
+    plt.plot([-3.2,3.8], [3.8,3.8], 'b--')
+    plt.plot([3.8,3.8], [-3.2,3.8], 'b--')
+    plt.plot([-3.2,3.8], [-3.2,-3.2], 'b--')
+    plt.plot([-3.2,-3.2], [-3.2,-3.8], 'b--')
 
     n = len(allCrazyFlies)
     positions = np.zeros((n-flightNumConfig['guard'], 2))
@@ -138,7 +143,7 @@ if __name__ == '__main__':
     fakeAgentHandle = plt.scatter(positions[-flightNumConfig["virtual"]:, 0], positions[-flightNumConfig["virtual"]:, 1], marker=">", edgecolors="blue", c="blue")
 
     plt.show()
-    time.sleep(5)
+    # time.sleep(5)
 
     # 启动线程，优先画图
     for process in processList:

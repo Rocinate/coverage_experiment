@@ -8,12 +8,12 @@ import traceback # 错误堆栈
 from algorithms.area_coverage.func import Func
 
 # 参数设置
-R = 4.5  # 通信半径
+R = 2.0  # 通信半径
 delta = 0.1  # 通信边界边权大小，越小效果越好
 epsilon = 0.1  # 最小代数连通度
 vMax = 0.5  # 连通保持最大速度（用于限幅）
 virtualVMax = 1.0 # 虚拟联通保持最大速度
-warnEpsilon = 0.8 # 连通度警戒值
+warnEpsilon = 0.6 # 连通度警戒值
 
 class Workers(Process):
     def __init__(self, name, res, allCrazyFlies, dt, epochNum, field_strength, box, flightNumConfig, noConnect):
@@ -107,14 +107,14 @@ class Workers(Process):
         if self.noConnect:
             u = ue
         else:
-            critical = self.func.is_Critical_robot(self.d, 0.7)
+            critical = self.func.is_Critical_robot(self.d, 0.8)
 
             for flightIndex in range(u.shape[0]):
                 if self.value[1] <= self.warnEpsilon:
                     if critical[flightIndex]:
-                        u[flightIndex] = 0.6*ue[flightIndex] + uc[flightIndex]
+                        u[flightIndex] = 0.9*ue[flightIndex] + uc[flightIndex]
                     else:
-                        u[flightIndex] = ue[flightIndex] + 0.5 * uc[flightIndex]
+                        u[flightIndex] = ue[flightIndex] + 0.1 * uc[flightIndex]
                 else:
                     u[flightIndex] = ue[flightIndex]
 
